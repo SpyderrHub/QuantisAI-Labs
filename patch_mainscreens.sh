@@ -1,0 +1,1 @@
+sed -i 's/onClick = { com.example.utils.downloadAudio(context, audioUrl, title) }/onClick = { scope.launch { com.example.utils.downloadAudio(context, audioUrl, title) } }/g' app/src/main/java/com/example/ui/screens/MainScreens.kt

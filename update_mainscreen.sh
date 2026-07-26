@@ -1,0 +1,4 @@
+sed -i 's/Triple("Library", Icons.Filled.LibraryMusic, Icons.Outlined.LibraryMusic),/Triple("Design", Icons.Filled.DesignServices, Icons.Outlined.DesignServices),\n        Triple("Library", Icons.Filled.LibraryMusic, Icons.Outlined.LibraryMusic),/g' app/src/main/java/com/example/ui/screens/MainScreens.kt
+sed -i 's/2 -> LibraryScreen(authManager)/2 -> VoiceDesignScreen(authManager)\n                3 -> LibraryScreen(authManager)/g' app/src/main/java/com/example/ui/screens/MainScreens.kt
+sed -i 's/3 -> AccountScreen(authManager, onLogout)/4 -> AccountScreen(authManager, onLogout)/g' app/src/main/java/com/example/ui/screens/MainScreens.kt
+sed -i '15iimport androidx.compose.material.icons.filled.DesignServices\nimport androidx.compose.material.icons.outlined.DesignServices' app/src/main/java/com/example/ui/screens/MainScreens.kt

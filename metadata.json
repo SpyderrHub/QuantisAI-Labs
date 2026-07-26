@@ -1,0 +1,6 @@
+{
+  "name": "QuantisAI Labs",
+  "description": "AI Voice Generator and Transcription App with Firebase",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

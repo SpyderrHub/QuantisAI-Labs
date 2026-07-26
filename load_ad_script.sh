@@ -1,0 +1,1 @@
+sed -i '15iimport com.google.android.gms.ads.AdRequest\nimport com.google.android.gms.ads.LoadAdError\nimport com.google.android.gms.ads.rewarded.RewardedAd\nimport com.google.android.gms.ads.rewarded.RewardedAdLoadCallback\nimport android.app.Activity' app/src/main/java/com/example/ui/screens/MainScreens.kt

@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">QuantisAI Labs</string>
+    <!-- Paste your Razorpay API Key ID here (starts with rzp_test_ or rzp_live_) -->
+    <string name="razorpay_key_id">rzp_live_Sf4W0FWckKrA6Y</string>
+</resources>
