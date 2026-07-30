@@ -39,14 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.api.RemoteConfigManager
-import com.razorpay.Checkout
-import org.json.JSONObject
-
-object PendingSubscription {
-    var pendingPlan: String = ""
-    var pendingType: String = ""
-    var pendingCredits: Int = 0
-}
+import com.example.billing.PlayBillingManager
 
 fun getPlanColor(planId: String?): Color {
     val id = planId?.lowercase() ?: "free"
@@ -61,7 +54,9 @@ enum class SubscriptionTier(
     val defaultYearlyPrice: Double,
     val remoteConfigMonthlyKey: String?,
     val remoteConfigYearlyKey: String?,
-    val color: Color
+    val color: Color,
+    val playStoreMonthlyId: String,
+    val playStoreYearlyId: String
 ) {
     FREE(
         id = "free",
@@ -71,7 +66,9 @@ enum class SubscriptionTier(
         defaultYearlyPrice = 0.0,
         remoteConfigMonthlyKey = null,
         remoteConfigYearlyKey = null,
-        color = Color(0xFFA855F7) // Radiant Purple
+        color = Color(0xFFA855F7), // Radiant Purple
+        playStoreMonthlyId = "",
+        playStoreYearlyId = ""
     ),
     STARTER(
         id = "starter",
@@ -81,7 +78,9 @@ enum class SubscriptionTier(
         defaultYearlyPrice = 1490.0,
         remoteConfigMonthlyKey = "RAZORPAY_PLAN_STARTER_MONTHLY",
         remoteConfigYearlyKey = "RAZORPAY_PLAN_STARTER_YEARLY",
-        color = Color(0xFFF97316) // Glowing Orange
+        color = Color(0xFFF97316), // Glowing Orange
+        playStoreMonthlyId = "starter_monthly",
+        playStoreYearlyId = "starter-yearly"
     ),
     CREATOR(
         id = "creator",
@@ -91,7 +90,9 @@ enum class SubscriptionTier(
         defaultYearlyPrice = 3990.0,
         remoteConfigMonthlyKey = "RAZORPAY_PLAN_CREATOR_MONTHLY",
         remoteConfigYearlyKey = "RAZORPAY_PLAN_CREATOR_YEARLY",
-        color = Color(0xFF3B82F6) // Brilliant Blue
+        color = Color(0xFF3B82F6), // Brilliant Blue
+        playStoreMonthlyId = "creator_monthly",
+        playStoreYearlyId = "creator_yearly"
     ),
     PRO(
         id = "pro",
@@ -101,7 +102,9 @@ enum class SubscriptionTier(
         defaultYearlyPrice = 9990.0,
         remoteConfigMonthlyKey = "RAZORPAY_PLAN_PRO_MONTHLY",
         remoteConfigYearlyKey = "RAZORPAY_PLAN_PRO_YEARLY",
-        color = Color(0xFF10B981) // Emerald Green
+        color = Color(0xFF10B981), // Emerald Green
+        playStoreMonthlyId = "pro_monthly",
+        playStoreYearlyId = "pro_yearly"
     )
 }
 
@@ -111,10 +114,17 @@ fun SubscriptionScreen(authManager: com.example.auth.AuthManager, onBack: () -> 
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = Monthly, 1 = Yearly
     val context = LocalContext.current
     val activity = context as Activity
+    val coroutineScope = rememberCoroutineScope()
 
     val user = authManager.currentUser.collectAsState(initial = authManager.currentUser.value).value
     val firestoreRepository = remember { com.example.data.FirestoreRepository() }
     var currentPlan by remember { mutableStateOf("free") }
+    
+    val billingManager = remember(user) {
+        PlayBillingManager(context, coroutineScope, firestoreRepository, user?.uid)
+    }
+    
+    val productDetailsList by billingManager.productDetailsList.collectAsState()
 
     LaunchedEffect(user) {
         if (user != null) {
@@ -123,9 +133,7 @@ fun SubscriptionScreen(authManager: com.example.auth.AuthManager, onBack: () -> 
         }
     }
 
-    // Initialize Razorpay
     LaunchedEffect(Unit) {
-        Checkout.preload(context)
         try {
             RemoteConfigManager.initialize()
         } catch (e: Exception) {
@@ -133,51 +141,14 @@ fun SubscriptionScreen(authManager: com.example.auth.AuthManager, onBack: () -> 
         }
     }
 
-    fun startPayment(amount: Double, tier: SubscriptionTier) {
-        val checkout = Checkout()
-        var rzpKey = RemoteConfigManager.getRazorpayKeyId()
-        if (rzpKey.isEmpty() || rzpKey.startsWith("placeholder", ignoreCase = true)) {
-            rzpKey = context.getString(com.example.R.string.razorpay_key_id)
-        }
-
-        // Check if the key is still the default placeholder
-        if (rzpKey == "rzp_test_YOUR_KEY_HERE" || rzpKey == "rzp_live_YOUR_KEY_HERE" || rzpKey.isEmpty()) {
-            Toast.makeText(context, "Please configure your Razorpay Key ID in strings.xml first!", Toast.LENGTH_LONG).show()
-            return
-        }
-
-        checkout.setKeyID(rzpKey)
+    fun startPayment(tier: SubscriptionTier) {
+        val targetProductId = if (selectedTab == 0) tier.playStoreMonthlyId else tier.playStoreYearlyId
+        val product = productDetailsList.find { it.productId == targetProductId }
         
-        // Save pending subscription state
-        val creditsToAdd = when (tier) {
-            SubscriptionTier.FREE -> 3000
-            SubscriptionTier.STARTER -> 50000
-            SubscriptionTier.CREATOR -> 300000
-            SubscriptionTier.PRO -> 1000000
-        }
-        PendingSubscription.pendingPlan = tier.id
-        PendingSubscription.pendingType = if (selectedTab == 0) "monthly" else "yearly"
-        PendingSubscription.pendingCredits = creditsToAdd
-
-        try {
-            val options = JSONObject()
-            options.put("name", "QuantisAI Labs")
-            options.put("description", "Subscription for ${tier.title}")
-            options.put("currency", "INR")
-            options.put("amount", (amount * 100).toString()) // amount in paise
-
-            // Explicitly configure payment methods directly from Android code
-            val methods = JSONObject()
-            methods.put("upi", true)         // Set to true to show UPI, or false to hide UPI
-            methods.put("card", true)        // Set to true to allow Cards
-            methods.put("netbanking", true)  // Set to true to allow Netbanking
-            methods.put("wallet", true)      // Set to true to allow Wallets
-            options.put("methods", methods)
-
-            checkout.open(activity, options)
-        } catch (e: Exception) {
-            Toast.makeText(context, "Error in payment: " + e.message, Toast.LENGTH_LONG).show()
-            Log.e("Razorpay", "Error in starting payment", e)
+        if (product != null) {
+            billingManager.launchBillingFlow(activity, product)
+        } else {
+            Toast.makeText(context, "Product not available for purchase yet. Please try again later.", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -359,18 +330,28 @@ fun SubscriptionScreen(authManager: com.example.auth.AuthManager, onBack: () -> 
                     val isFree = tier == SubscriptionTier.FREE
                     val isCurrentPlan = tier.id.lowercase() == currentPlan.lowercase()
                     
-                    // Price calculation: remote config first, then fallback
-                    val configKey = if (selectedTab == 0) tier.remoteConfigMonthlyKey else tier.remoteConfigYearlyKey
-                    val configPrice = configKey?.let { RemoteConfigManager.getPlanPrice(it) }
-                    val doublePrice = configPrice?.toDoubleOrNull() ?: if (selectedTab == 0) tier.defaultMonthlyPrice else tier.defaultYearlyPrice
+                    val targetProductId = if (selectedTab == 0) tier.playStoreMonthlyId else tier.playStoreYearlyId
+                    val productDetail = productDetailsList.find { it.productId == targetProductId }
+                    val formattedPrice = productDetail?.subscriptionOfferDetails?.firstOrNull()?.pricingPhases?.pricingPhaseList?.firstOrNull()?.formattedPrice
                     
-                    val displayPriceString = if (doublePrice % 1.0 == 0.0) {
-                        doublePrice.toInt().toString()
-                    } else {
-                        doublePrice.toString()
-                    }
-
                     val priceSuffix = if (selectedTab == 0) "/m" else "/y"
+
+                    val displayPriceText = if (isFree) {
+                        "FREE"
+                    } else if (formattedPrice != null) {
+                        "$formattedPrice$priceSuffix"
+                    } else {
+                        // Fallback logic
+                        val configKey = if (selectedTab == 0) tier.remoteConfigMonthlyKey else tier.remoteConfigYearlyKey
+                        val configPrice = configKey?.let { RemoteConfigManager.getPlanPrice(it) }
+                        val doublePrice = configPrice?.toDoubleOrNull() ?: if (selectedTab == 0) tier.defaultMonthlyPrice else tier.defaultYearlyPrice
+                        val displayPriceString = if (doublePrice % 1.0 == 0.0) {
+                            doublePrice.toInt().toString()
+                        } else {
+                            doublePrice.toString()
+                        }
+                        "₹$displayPriceString$priceSuffix"
+                    }
 
                     Box(
                         modifier = Modifier
@@ -400,7 +381,7 @@ fun SubscriptionScreen(authManager: com.example.auth.AuthManager, onBack: () -> 
                                         Toast.makeText(context, "You are currently enjoying the Free Plan!", Toast.LENGTH_SHORT).show()
                                     }
                                 } else {
-                                    startPayment(doublePrice, tier)
+                                    startPayment(tier)
                                 }
                             }
                     ) {
@@ -485,7 +466,7 @@ fun SubscriptionScreen(authManager: com.example.auth.AuthManager, onBack: () -> 
                                      contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = if (isFree) "FREE" else "$displayPriceString$priceSuffix",
+                                        text = displayPriceText,
                                         style = MaterialTheme.typography.labelLarge,
                                         fontWeight = FontWeight.Bold,
                                         color = tier.color

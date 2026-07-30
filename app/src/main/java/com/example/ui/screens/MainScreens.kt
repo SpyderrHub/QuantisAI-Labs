@@ -1,4 +1,8 @@
 package com.example.ui.screens
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.rounded.Pause
+
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 
@@ -1322,8 +1326,8 @@ fun VoiceCard(voice: VoiceEntity, isSaved: Boolean = false, onToggleSave: () -> 
                     .background(if (isSaved) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant, CircleShape)
             ) {
                 Icon(
-                    if (isSaved) Icons.Rounded.CheckCircle else Icons.Rounded.Add,
-                    contentDescription = if (isSaved) "Remove" else "Add",
+                    if (isSaved) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                    contentDescription = if (isSaved) "Remove" else "Save",
                     tint = if (isSaved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -1364,12 +1368,17 @@ fun VoiceCard(voice: VoiceEntity, isSaved: Boolean = false, onToggleSave: () -> 
                 },
                 modifier = Modifier
                     .size(40.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                    .background(
+                        brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                            colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary)
+                        ),
+                        shape = CircleShape
+                    )
             ) {
                 Icon(
-                    if (isPlaying) Icons.Rounded.CheckCircle else Icons.Rounded.PlayArrow,
+                    if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                     contentDescription = "Preview",
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = MaterialTheme.colorScheme.onPrimary
                 )
             }
         }

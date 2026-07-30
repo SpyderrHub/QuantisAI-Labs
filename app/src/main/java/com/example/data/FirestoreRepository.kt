@@ -1,4 +1,5 @@
 package com.example.data
+import kotlinx.coroutines.channels.awaitClose
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
@@ -14,7 +15,9 @@ data class UserProfile(
     var savedVoices: List<String> = emptyList(),
     var subscriptionPlan: String = "free",
     var subscriptionType: String = "",
-    var subscriptionExpiry: Long = 0L
+    var subscriptionExpiry: Long = 0L,
+    var adsWatchedToday: Int = 0,
+    var lastAdDate: String = ""
 )
 
 data class GenerationHistory(
@@ -51,6 +54,29 @@ data class VoiceEntity(
 class FirestoreRepository {
     private val db = try { Firebase.firestore } catch (e: Exception) { null }
     
+    fun getUserProfileFlow(userId: String, email: String): kotlinx.coroutines.flow.Flow<UserProfile> = kotlinx.coroutines.flow.callbackFlow {
+        if (db == null) {
+            trySend(UserProfile(email))
+            close()
+            return@callbackFlow
+        }
+        val listener = db.collection("users").document(userId).addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                trySend(UserProfile(email))
+                return@addSnapshotListener
+            }
+            if (snapshot != null && snapshot.exists()) {
+                val profile = snapshot.toObject(UserProfile::class.java) ?: UserProfile(email)
+                trySend(profile)
+            } else {
+                val profile = UserProfile(email)
+                db.collection("users").document(userId).set(profile)
+                trySend(profile)
+            }
+        }
+        awaitClose { listener.remove() }
+    }
+
     suspend fun getUserProfile(userId: String, email: String): UserProfile {
         if (db == null) return UserProfile(email)
         return try {
@@ -117,6 +143,22 @@ class FirestoreRepository {
             true
         } catch (e: Exception) {
             android.util.Log.e("FirestoreRepository", "Failed to update subscription", e)
+            false
+        }
+    }
+
+    suspend fun updateAdsQuota(userId: String, adsWatchedToday: Int, lastAdDate: String): Boolean {
+        if (db == null) return false
+        return try {
+            val docRef = db.collection("users").document(userId)
+            val updates = mapOf(
+                "adsWatchedToday" to adsWatchedToday,
+                "lastAdDate" to lastAdDate
+            )
+            docRef.update(updates).await()
+            true
+        } catch (e: Exception) {
+            android.util.Log.e("FirestoreRepository", "Failed to update ads quota", e)
             false
         }
     }

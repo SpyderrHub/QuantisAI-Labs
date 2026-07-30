@@ -24,17 +24,23 @@ import com.example.ui.screens.*
 import com.example.ui.theme.MyApplicationTheme
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
-import com.razorpay.PaymentResultListener
 import android.widget.Toast
 import com.example.data.FirestoreRepository
 
-class MainActivity : ComponentActivity(), PaymentResultListener {
+import com.google.firebase.analytics.FirebaseAnalytics
+import com.google.firebase.analytics.analytics
+import com.google.firebase.Firebase
+
+class MainActivity : ComponentActivity() {
     private lateinit var authManager: AuthManager
+    private lateinit var firebaseAnalytics: FirebaseAnalytics
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         MobileAds.initialize(this)
+        
+        firebaseAnalytics = Firebase.analytics
         
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
@@ -80,60 +86,6 @@ class MainActivity : ComponentActivity(), PaymentResultListener {
             }
         }
     }
-
-    override fun onPaymentSuccess(razorpayPaymentId: String?) {
-        val currentUserId = authManager.currentUser.value?.uid
-        if (currentUserId != null) {
-            val plan = com.example.ui.screens.PendingSubscription.pendingPlan
-            val type = com.example.ui.screens.PendingSubscription.pendingType
-            val credits = com.example.ui.screens.PendingSubscription.pendingCredits
-            
-            if (plan.isNotEmpty() && credits > 0) {
-                lifecycleScope.launch {
-                    val repository = FirestoreRepository()
-                    val success = repository.updateSubscription(currentUserId, plan, type, credits)
-                    if (success) {
-                        Toast.makeText(
-                            this@MainActivity,
-                            "Payment Successful! Activated ${plan.uppercase()} plan with $credits credits added.",
-                            Toast.LENGTH_LONG
-                        ).show()
-                    } else {
-                        Toast.makeText(
-                            this@MainActivity,
-                            "Payment received but failed to update account. Please contact support with Payment ID: $razorpayPaymentId",
-                            Toast.LENGTH_LONG
-                        ).show()
-                    }
-                    
-                    // Reset pending state
-                    com.example.ui.screens.PendingSubscription.pendingPlan = ""
-                    com.example.ui.screens.PendingSubscription.pendingType = ""
-                    com.example.ui.screens.PendingSubscription.pendingCredits = 0
-                }
-            } else {
-                Toast.makeText(
-                    this,
-                    "Payment Successful! ID: $razorpayPaymentId",
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-        } else {
-            Toast.makeText(
-                this,
-                "Payment Successful but no user is logged in! ID: $razorpayPaymentId",
-                Toast.LENGTH_LONG
-            ).show()
-        }
-    }
-
-    override fun onPaymentError(errorCode: Int, response: String?) {
-        Toast.makeText(
-            this,
-            "Payment Failed! Error: $response",
-            Toast.LENGTH_LONG
-        ).show()
-    }
 }
 
 @Composable
@@ -161,9 +113,10 @@ fun QuantisApp(authManager: AuthManager) {
         composable<IntroRoute> {
             IntroScreen(
                 onNavigateToLogin = {
-                    navController.navigate(LoginRoute) {
-                        popUpTo<IntroRoute> { inclusive = true }
-                    }
+                    navController.navigate(LoginRoute)
+                },
+                onNavigateToSignup = {
+                    navController.navigate(SignupRoute)
                 }
             )
         }

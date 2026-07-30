@@ -1,0 +1,27 @@
+--- app/src/main/java/com/example/ui/screens/AuthScreens.kt
++++ app/src/main/java/com/example/ui/screens/AuthScreens.kt
+@@ -616,6 +616,15 @@
+                         ),
+                         decorationBox = {
++                            val infiniteTransition = androidx.compose.animation.core.rememberInfiniteTransition(label = "cursor")
++                            val cursorAlpha by infiniteTransition.animateFloat(
++                                initialValue = 1f,
++                                targetValue = 0f,
++                                animationSpec = androidx.compose.animation.core.infiniteRepeatable(
++                                    animation = androidx.compose.animation.core.tween(500, easing = androidx.compose.animation.core.LinearEasing),
++                                    repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
++                                ),
++                                label = "cursorAlpha"
++                            )
+                             Row(
+                                 modifier = Modifier.fillMaxWidth(),
+                                 horizontalArrangement = Arrangement.SpaceBetween
+@@ -634,6 +643,9 @@
+                                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                             color = Color.Black
+                                         )
++                                        if (isFocused) {
++                                            Box(modifier = Modifier.width(2.dp).height(24.dp).background(Color.Black.copy(alpha = cursorAlpha)))
++                                        }
+                                     }
+                                 }
