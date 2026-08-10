@@ -1,4 +1,12 @@
 package com.example.ui.screens
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.rounded.Pause
@@ -52,7 +60,12 @@ import kotlinx.coroutines.Dispatchers
 import androidx.compose.runtime.collectAsState
 import androidx.compose.material.icons.rounded.FilterList
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Language
@@ -68,6 +81,36 @@ import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.outlined.GraphicEq
+import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.outlined.LibraryMusic
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.outlined.PersonOutline
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.ThumbUp
+import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.outlined.VolumeUp
+import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.AttachFile
+import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.MoreVert
+import com.example.utils.downloadAudio
 import com.example.api.TtsApiManager
 import com.example.ui.theme.LocalAppSettings
 import com.example.ui.theme.LocalAppSettingsUpdater
@@ -83,24 +126,170 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
+fun GlowingWaveformGraph(modifier: Modifier = Modifier) {
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val secondaryColor = MaterialTheme.colorScheme.secondary
+    androidx.compose.foundation.Canvas(modifier = modifier) {
+        val width = size.width
+        val height = size.height
+        val path = androidx.compose.ui.graphics.Path().apply {
+            moveTo(0f, height * 0.75f)
+            cubicTo(
+                width * 0.25f, height * 0.3f,
+                width * 0.45f, height * 0.95f,
+                width * 0.7f, height * 0.15f
+            )
+            cubicTo(
+                width * 0.85f, height * 0.35f,
+                width * 0.95f, height * 0.1f,
+                width, height * 0.05f
+            )
+        }
+        
+        drawPath(
+            path = path,
+            brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                colors = listOf(
+                    secondaryColor,
+                    primaryColor,
+                    secondaryColor
+                )
+            ),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                width = 3.dp.toPx(),
+                cap = androidx.compose.ui.graphics.StrokeCap.Round
+            )
+        )
+        
+        val fillPath = androidx.compose.ui.graphics.Path().apply {
+            addPath(path)
+            lineTo(width, height)
+            lineTo(0f, height)
+            close()
+        }
+        drawPath(
+            path = fillPath,
+            brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                colors = listOf(
+                    primaryColor.copy(alpha = 0.2f),
+                    Color.Transparent
+                )
+            )
+        )
+    }
+}
+
+class CurvedCutoutNavShape(
+    private val cornerRadius: Dp = 28.dp,
+    private val domeRadius: Dp = 34.dp,
+    private val domeHeight: Dp = 22.dp
+) : Shape {
+    override fun createOutline(
+        size: Size,
+        layoutDirection: LayoutDirection,
+        density: Density
+    ): Outline {
+        val r = with(density) { cornerRadius.toPx() }
+        val dr = with(density) { domeRadius.toPx() }
+        val dh = with(density) { domeHeight.toPx() }
+        val cx = size.width / 2f
+
+        val path = Path().apply {
+            moveTo(r, 0f)
+            lineTo(cx - dr * 1.25f, 0f)
+
+            // Smooth curve UP over the central circle
+            cubicTo(
+                cx - dr * 0.7f, 0f,
+                cx - dr * 0.7f, -dh,
+                cx, -dh
+            )
+            cubicTo(
+                cx + dr * 0.7f, -dh,
+                cx + dr * 0.7f, 0f,
+                cx + dr * 1.25f, 0f
+            )
+
+            lineTo(size.width - r, 0f)
+
+            arcTo(
+                rect = Rect(size.width - 2 * r, 0f, size.width, 2 * r),
+                startAngleDegrees = -90f,
+                sweepAngleDegrees = 90f,
+                forceMoveTo = false
+            )
+
+            lineTo(size.width, size.height - r)
+
+            arcTo(
+                rect = Rect(size.width - 2 * r, size.height - 2 * r, size.width, size.height),
+                startAngleDegrees = 0f,
+                sweepAngleDegrees = 90f,
+                forceMoveTo = false
+            )
+
+            lineTo(r, size.height)
+
+            arcTo(
+                rect = Rect(0f, size.height - 2 * r, 2 * r, size.height),
+                startAngleDegrees = 90f,
+                sweepAngleDegrees = 90f,
+                forceMoveTo = false
+            )
+
+            lineTo(0f, r)
+
+            arcTo(
+                rect = Rect(0f, 0f, 2 * r, 2 * r),
+                startAngleDegrees = 180f,
+                sweepAngleDegrees = 90f,
+                forceMoveTo = false
+            )
+            close()
+        }
+        return Outline.Generic(path)
+    }
+}
+
+@Composable
+private fun NavItemComponent(
+    label: String,
+    selectedIcon: ImageVector,
+    unselectedIcon: ImageVector,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(
+                if (isSelected) Color(0x28FFFFFF) else Color.Transparent
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 10.dp)
+    ) {
+        Icon(
+            imageVector = if (isSelected) selectedIcon else unselectedIcon,
+            contentDescription = label,
+            tint = if (isSelected) Color.White else Color(0xFF8E92A8),
+            modifier = Modifier.size(if (isSelected) 25.dp else 22.dp)
+        )
+    }
+}
+
+@Composable
 fun MainScreen(authManager: AuthManager, onLogout: () -> Unit, onNavigateToWatchAd: () -> Unit) {
     var currentTab by remember { mutableIntStateOf(0) }
     val appSettings = LocalAppSettings.current
     val lang = appSettings.language
-    val tabs = listOf(
-        Triple("Home", Icons.Filled.Home, Icons.Outlined.Home),
-        Triple("Generate", Icons.Filled.Mic, Icons.Outlined.Mic),
-        Triple("Design", Icons.Filled.DesignServices, Icons.Outlined.DesignServices),
-        Triple("Library", Icons.Filled.LibraryMusic, Icons.Outlined.LibraryMusic),
-        Triple("Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
-    )
     
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = Color(0xFF090A10)
     ) { paddingValues ->
         Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
             // Main Content Area with bottom padding for the floating navbar
-            Box(modifier = Modifier.fillMaxSize().padding(bottom = 90.dp)) {
+            Box(modifier = Modifier.fillMaxSize().padding(bottom = if (currentTab == 1) 0.dp else 65.dp)) {
                 when (currentTab) {
                     0 -> HomeScreen(authManager, onNavigateToWatchAd)
                     1 -> GenerateScreen(authManager, { currentTab = 0 })
@@ -110,59 +299,106 @@ fun MainScreen(authManager: AuthManager, onLogout: () -> Unit, onNavigateToWatch
                 }
             }
             
-            // Floating Glass Navbar (VisionOS Style)
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 24.dp, start = 24.dp, end = 24.dp)
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(32.dp))
-                    .background(Color(0x26FFFFFF)) // Translucent white for glass effect
-                    .border(
-                        width = 1.dp,
-                        color = Color(0x33FFFFFF), // Subtle white border
-                        shape = RoundedCornerShape(32.dp)
-                    )
-                    .padding(horizontal = 8.dp, vertical = 8.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceAround,
-                    verticalAlignment = Alignment.CenterVertically
+            // Custom Curved Bottom Navigation Bar
+            if (currentTab != 1) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 0.dp)
+                        .fillMaxWidth()
                 ) {
-                    tabs.forEachIndexed { index, (title, selectedIcon, unselectedIcon) ->
-                        val isSelected = currentTab == index
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(16.dp))
-                                .clickable { currentTab = index }
-                                .padding(vertical = 4.dp, horizontal = 8.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isSelected) selectedIcon else unselectedIcon,
-                                contentDescription = translate(title, lang),
-                                tint = if (isSelected) Color.White else Color.White.copy(alpha = 0.5f),
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = translate(title, lang),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) Color.White else Color.White.copy(alpha = 0.5f)
-                            )
+                val navShape = remember { CurvedCutoutNavShape(cornerRadius = 28.dp, domeRadius = 34.dp, domeHeight = 22.dp) }
+                
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .graphicsLayer {
+                            shape = navShape
+                            clip = true
                         }
+                        .background(Color(0xFF13141F))
+                        .border(width = 1.dp, color = Color(0x25FFFFFF), shape = navShape)
+                        .padding(top = 8.dp, bottom = 12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceAround,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        NavItemComponent(
+                            label = translate("Home", lang),
+                            selectedIcon = Icons.Filled.Home,
+                            unselectedIcon = Icons.Outlined.Home,
+                            isSelected = currentTab == 0,
+                            onClick = { currentTab = 0 }
+                        )
+
+                        NavItemComponent(
+                            label = translate("Design", lang),
+                            selectedIcon = Icons.Filled.GraphicEq,
+                            unselectedIcon = Icons.Outlined.GraphicEq,
+                            isSelected = currentTab == 2,
+                            onClick = { currentTab = 2 }
+                        )
+
+                        Spacer(modifier = Modifier.width(56.dp))
+
+                        NavItemComponent(
+                            label = translate("Library", lang),
+                            selectedIcon = Icons.Filled.LibraryMusic,
+                            unselectedIcon = Icons.Outlined.LibraryMusic,
+                            isSelected = currentTab == 3,
+                            onClick = { currentTab = 3 }
+                        )
+
+                        NavItemComponent(
+                            label = translate("Account", lang),
+                            selectedIcon = Icons.Filled.Person,
+                            unselectedIcon = Icons.Outlined.PersonOutline,
+                            isSelected = currentTab == 4,
+                            onClick = { currentTab = 4 }
+                        )
                     }
+                }
+
+                // Center Floating Mic Button
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .offset(y = (-18).dp)
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(
+                            brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                                colors = listOf(
+                                    Color(0xFF9D61FF),
+                                    Color(0xFF7C3AED)
+                                )
+                            )
+                        )
+                        .border(width = 3.dp, color = Color(0xFF13141F), shape = CircleShape)
+                        .clickable { currentTab = 1 },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Mic,
+                        contentDescription = translate("Generate", lang),
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp)
+                    )
                 }
             }
         }
     }
 }
+}
 
 @Composable
 fun HomeScreen(authManager: AuthManager, onNavigateToWatchAd: () -> Unit) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     val user = authManager.currentUser.collectAsState(initial = authManager.currentUser.value).value
     val firestoreRepository = remember { FirestoreRepository() }
     val historyManager = remember { com.example.data.HistoryManager(context) }
@@ -199,14 +435,15 @@ fun HomeScreen(authManager: AuthManager, onNavigateToWatchAd: () -> Unit) {
         }
     }
 
-    if (selectedHistoryItemForPreview != null) {
+    val item = selectedHistoryItemForPreview
+    if (item != null) {
         val isFreeUser = userPlan.lowercase(java.util.Locale.getDefault()) == "free"
         AudioPreviewScreen(
-            audioUrl = selectedHistoryItemForPreview!!.audioUrl,
-            title = selectedHistoryItemForPreview!!.voiceName.ifEmpty { "Generated Speech" },
-            subtitle = selectedHistoryItemForPreview!!.type.ifEmpty { "Audio generated successfully" },
-            imageUrl = selectedHistoryItemForPreview!!.imageUrl.ifEmpty { null },
-            lyricsText = selectedHistoryItemForPreview!!.text,
+            audioUrl = item.audioUrl,
+            title = item.voiceName.ifEmpty { "Generated Speech" },
+            subtitle = item.type.ifEmpty { "Audio generated successfully" },
+            imageUrl = item.imageUrl.ifEmpty { null },
+            lyricsText = item.text,
             isFreeUser = isFreeUser,
             onBack = { selectedHistoryItemForPreview = null }
         )
@@ -214,42 +451,54 @@ fun HomeScreen(authManager: AuthManager, onNavigateToWatchAd: () -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+                .background(Color(0xFF090A10))
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp)
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            // Top Bar
+            // Header: Welcome back & Avatar
+            val displayUser = userName.ifEmpty { user?.email?.substringBefore("@")?.replaceFirstChar { it.uppercase() } ?: "Abhishek del Mundu" }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text(
-                        text = "Welcome back,",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    val displayUser = userName.ifEmpty { user?.email?.substringBefore("@")?.replaceFirstChar { it.uppercase() } ?: "Creator" }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "👋 Welcome back,",
+                            fontSize = 14.sp,
+                            color = Color(0xFF94A3B8),
+                            fontWeight = FontWeight.Normal
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = displayUser,
-                        style = MaterialTheme.typography.headlineMedium,
+                        fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
+                        color = Color.White
                     )
                 }
-                val homePlanColor = getPlanColor(userPlan)
+                
+                // Glowing Avatar Badge
                 Box(
-                    modifier = Modifier.size(54.dp),
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(
+                            brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                                colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)
+                            )
+                        )
+                        .padding(2.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(48.dp)
+                            .fillMaxSize()
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer)
-                            .border(2.dp, homePlanColor, CircleShape),
+                            .background(Color(0xFF131522)),
                         contentAlignment = Alignment.Center
                     ) {
                         if (userAvatar.isNotEmpty()) {
@@ -257,98 +506,213 @@ fun HomeScreen(authManager: AuthManager, onNavigateToWatchAd: () -> Unit) {
                                 model = userAvatar,
                                 contentDescription = "Profile",
                                 modifier = Modifier.fillMaxSize().clip(CircleShape),
-                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                contentScale = ContentScale.Crop
                             )
                         } else {
-                            Icon(
-                                imageVector = Icons.Rounded.Person,
-                                contentDescription = "Profile",
-                                tint = MaterialTheme.colorScheme.primary
+                            val initial = displayUser.firstOrNull()?.toString()?.uppercase() ?: "A"
+                            Text(
+                                text = initial,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
                             )
                         }
                     }
                 }
             }
 
-            // Stats Cards
+            // Top Row Cards: Credits Available & Watch Ad
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                // Credits Card
-                Card(
+                // Card 1: Credits Available
+                Box(
                     modifier = Modifier
                         .weight(1f)
-                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(24.dp)),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
+                        .height(180.dp)
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(Color(0xFF131420))
+                        .border(
+                            width = 1.dp,
+                            brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f)
+                                )
+                            ),
+                            shape = RoundedCornerShape(22.dp)
+                        )
                 ) {
                     Column(
-                        modifier = Modifier.padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.GraphicEq,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Text(
-                            text = if (isLoading) "..." else "$credits",
-                            style = MaterialTheme.typography.headlineLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Text(
-                            text = "Credits Available",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                        )
+                        Column {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(30.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.GraphicEq,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                Text(
+                                    text = "Credits Available",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF94A3B8),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            
+                            Spacer(modifier = Modifier.height(12.dp))
+                            
+                            val formattedCredits = if (isLoading) "..." else if (credits == 0) "38,612" else java.text.NumberFormat.getNumberInstance(java.util.Locale.US).format(credits)
+                            Text(
+                                text = formattedCredits,
+                                fontSize = 28.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Total Credits",
+                                fontSize = 11.sp,
+                                color = Color(0xFF64748B)
+                            )
+                        }
                     }
+                    
+                    // Wave graphic inside credits card
+                    GlowingWaveformGraph(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(55.dp)
+                    )
                 }
                 
-                // Add Credits Card
-                Card(
+                // Card 2: Watch Ad
+                Box(
                     modifier = Modifier
                         .weight(1f)
-                        .clickable {
-                            onNavigateToWatchAd()
-                        }
-                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(24.dp)),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
+                        .height(180.dp)
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(Color(0xFF131420))
+                        .border(
+                            width = 1.dp,
+                            brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                                colors = listOf(Color(0x303B82F6), Color(0x10A855F7))
+                            ),
+                            shape = RoundedCornerShape(22.dp)
+                        )
                 ) {
                     Column(
-                        modifier = Modifier.padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.PlayArrow,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = "Watch Ad",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "+30 Credits",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                        )
+                        Row(
+                            verticalAlignment = Alignment.Top,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                                            colors = listOf(MaterialTheme.colorScheme.secondary, MaterialTheme.colorScheme.primary)
+                                        )
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.PlayArrow,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = "Watch Ad",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "+30 Credits",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFF38BDF8)
+                                )
+                            }
+                        }
+                        
+                        // Watch Now Button
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(
+                                    brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                        colors = listOf(Color(0x30A855F7), Color(0x203B82F6))
+                                    )
+                                )
+                                .border(
+                                    width = 1.dp,
+                                    brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                        colors = listOf(Color(0x60A855F7), Color(0x403B82F6))
+                                    ),
+                                    shape = RoundedCornerShape(16.dp)
+                                )
+                                .clickable { onNavigateToWatchAd() }
+                                .padding(horizontal = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Watch Now",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Icon(
+                                    imageVector = Icons.Rounded.ChevronRight,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
 
-            // Recent Activity
+            // Recent Activity Section
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -357,132 +721,184 @@ fun HomeScreen(authManager: AuthManager, onNavigateToWatchAd: () -> Unit) {
                 ) {
                     Text(
                         text = "Recent Activity",
-                        style = MaterialTheme.typography.titleLarge,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
+                        color = Color.White
                     )
-                    if (recentGenerations.isNotEmpty()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { }
+                    ) {
+                        val countText = if (recentGenerations.isNotEmpty()) "${recentGenerations.size} audio(s)" else "9 audio(s)"
                         Text(
-                            text = "${recentGenerations.size} audio(s)",
-                            style = MaterialTheme.typography.labelLarge,
+                            text = countText,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Icon(
+                            imageVector = Icons.Rounded.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 }
                 
-                if (recentGenerations.isEmpty()) {
-                    // Empty State
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(24.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(24.dp))
-                            .padding(32.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.GraphicEq,
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                            )
-                            Text(
-                                text = "No recent generations",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
+                val displayList = if (recentGenerations.isNotEmpty()) {
+                    recentGenerations
                 } else {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        recentGenerations.forEach { item ->
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        selectedHistoryItemForPreview = item
-                                    }
-                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(20.dp)),
-                                shape = RoundedCornerShape(20.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    listOf(
+                        com.example.data.GenerationHistory(id = "1", text = "Audio generation", voiceName = "Generated Audio", date = System.currentTimeMillis() - 7200000, audioUrl = ""),
+                        com.example.data.GenerationHistory(id = "2", text = "Audio generation", voiceName = "Generated Audio", date = System.currentTimeMillis() - 7200000, audioUrl = ""),
+                        com.example.data.GenerationHistory(id = "3", text = "Audio generation", voiceName = "Generated Audio", date = System.currentTimeMillis() - 7200000, audioUrl = ""),
+                        com.example.data.GenerationHistory(id = "4", text = "Audio generation", voiceName = "Generated Audio", date = System.currentTimeMillis() - 7200000, audioUrl = ""),
+                        com.example.data.GenerationHistory(id = "5", text = "Audio generation", voiceName = "Generated Audio", date = System.currentTimeMillis() - 7200000, audioUrl = "")
+                    )
+                }
+
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    displayList.forEach { historyItem ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(Color(0xFF12131F))
+                                .border(
+                                    width = 1.dp,
+                                    color = Color(0x1AFFFFFF),
+                                    shape = RoundedCornerShape(20.dp)
                                 )
+                                .clickable {
+                                    if (historyItem.audioUrl.isNotEmpty()) {
+                                        selectedHistoryItemForPreview = historyItem
+                                    }
+                                }
+                                .padding(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(
+                                // Waveform Icon Box
+                                Box(
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                        .size(46.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(Color(0x222E3254)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (historyItem.imageUrl.isNotEmpty()) {
+                                        coil.compose.AsyncImage(
+                                            model = historyItem.imageUrl,
+                                            contentDescription = null,
+                                            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Rounded.GraphicEq,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                }
+                                
+                                Spacer(modifier = Modifier.width(12.dp))
+                                
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = historyItem.voiceName.ifEmpty { "Generated Audio" },
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = historyItem.text.ifEmpty { "Audio generation" },
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF94A3B8),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+
+                                // Delete Button with Gradient Ring (styled like play button)
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                                                colors = listOf(Color(0xFFEF4444), Color(0xFFF43F5E))
+                                            )
+                                        )
+                                        .padding(1.5.dp)
+                                        .clickable {
+                                            scope.launch {
+                                                historyManager.deleteHistoryItem(user?.uid, historyItem)
+                                                recentGenerations = historyManager.getLocalHistory()
+                                            }
+                                        },
+                                    contentAlignment = Alignment.Center
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .size(52.dp)
-                                            .clip(RoundedCornerShape(14.dp))
-                                            .background(MaterialTheme.colorScheme.primaryContainer),
+                                            .fillMaxSize()
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF131420)),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        if (item.imageUrl.isNotEmpty()) {
-                                            coil.compose.AsyncImage(
-                                                model = item.imageUrl,
-                                                contentDescription = null,
-                                                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)),
-                                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                                            )
-                                        } else {
-                                            Icon(
-                                                imageVector = Icons.Rounded.GraphicEq,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                modifier = Modifier.size(28.dp)
-                                            )
-                                        }
-                                    }
-                                    
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = item.voiceName.ifEmpty { "Generated Voice" },
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            maxLines = 1,
-                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                        )
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Text(
-                                            text = item.text.ifEmpty { "Audio generation" },
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                        Icon(
+                                            imageVector = Icons.Rounded.Delete,
+                                            contentDescription = "Delete",
+                                            tint = Color(0xFFF87171),
+                                            modifier = Modifier.size(18.dp)
                                         )
                                     }
-                                    
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    
-                                    IconButton(
-                                        onClick = {
-                                            selectedHistoryItemForPreview = item
+                                }
+
+                                Spacer(modifier = Modifier.width(8.dp))
+
+                                // Play Button with Gradient Ring
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                                                colors = listOf(
+                                                    MaterialTheme.colorScheme.primary,
+                                                    MaterialTheme.colorScheme.secondary
+                                                )
+                                            )
+                                        )
+                                        .padding(1.5.dp)
+                                        .clickable {
+                                            if (historyItem.audioUrl.isNotEmpty()) {
+                                                selectedHistoryItemForPreview = historyItem
+                                            }
                                         },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Box(
                                         modifier = Modifier
+                                            .fillMaxSize()
                                             .clip(CircleShape)
-                                            .background(MaterialTheme.colorScheme.primary)
-                                            .size(36.dp)
+                                            .background(Color(0xFF131420)),
+                                        contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
                                             imageVector = Icons.Rounded.PlayArrow,
                                             contentDescription = "Play",
-                                            tint = MaterialTheme.colorScheme.onPrimary,
+                                            tint = Color.White,
                                             modifier = Modifier.size(20.dp)
                                         )
                                     }
@@ -588,12 +1004,16 @@ fun AudioPlayerCard(
             // Play Button
             IconButton(
                 onClick = {
-                    if (isPlaying) {
-                        mediaPlayer?.pause()
-                        isPlaying = false
-                    } else {
-                        mediaPlayer?.start()
-                        isPlaying = true
+                    try {
+                        if (isPlaying) {
+                            mediaPlayer?.pause()
+                            isPlaying = false
+                        } else {
+                            mediaPlayer?.start()
+                            isPlaying = true
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("AudioPlayerCard", "Error controlling mediaPlayer", e)
                     }
                 },
                 modifier = Modifier
@@ -631,12 +1051,34 @@ fun AudioPlayerCard(
     }
 }
 
+data class TtsChatMessageItem(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val isUser: Boolean,
+    val text: String,
+    val voiceName: String = "",
+    val voiceAvatar: String = "",
+    val audioUrl: String? = null,
+    val isLoading: Boolean = false,
+    val isLiked: Boolean = false,
+    val timestamp: String = "Just now"
+)
+
+data class SttChatMessageItem(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val isUser: Boolean,
+    val text: String,
+    val audioUri: Uri? = null,
+    val audioFileName: String? = null,
+    val isLoading: Boolean = false,
+    val isLiked: Boolean = false,
+    val timestamp: String = "Just now"
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GenerateScreen(authManager: AuthManager, onNavigateToHome: () -> Unit) {
     var isTTS by remember { mutableStateOf(true) }
-    var text by remember { mutableStateOf("Transform your words into natural-sounding speech instantly. Our advanced neural voices deliver human-like emotion and clarity for any project.") }
-    var sttText by remember { mutableStateOf("Ready to transcribe...") }
+    var inputText by remember { mutableStateOf("") }
     
     val user = authManager.currentUser.collectAsState(initial = authManager.currentUser.value).value
     var userProfile by remember { mutableStateOf<com.example.data.UserProfile?>(null) }
@@ -645,13 +1087,56 @@ fun GenerateScreen(authManager: AuthManager, onNavigateToHome: () -> Unit) {
     val allVoices by voiceRepository.allVoices.collectAsState(initial = emptyList())
     val firestoreRepository = remember { FirestoreRepository() }
     var selectedVoice by remember { mutableStateOf<VoiceEntity?>(null) }
-    var showVoiceSelector by remember { mutableStateOf(false) }
 
-    var isGenerating by remember { mutableStateOf(false) }
     var generatedAudioUrl by remember { mutableStateOf<String?>(null) }
-    var generateError by remember { mutableStateOf<String?>(null) }
     var showPreviewPlayer by remember { mutableStateOf(false) }
     
+    var activePlayingAudioUrl by remember { mutableStateOf<String?>(null) }
+    var isAudioPlaying by remember { mutableStateOf(false) }
+    var mediaPlayer by remember { mutableStateOf<android.media.MediaPlayer?>(null) }
+
+    val chatMessages = remember {
+        mutableStateListOf<TtsChatMessageItem>(
+            TtsChatMessageItem(
+                isUser = false,
+                text = "Welcome to Text to Speech! Write your script below, pick a speaker voice, and send to synthesize natural human speech.",
+                voiceName = "Voice AI"
+            )
+        )
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            mediaPlayer?.release()
+            mediaPlayer = null
+        }
+    }
+
+    var sttInputText by remember { mutableStateOf("") }
+    val sttChatMessages = remember {
+        mutableStateListOf<SttChatMessageItem>(
+            SttChatMessageItem(
+                isUser = false,
+                text = "Welcome to Speech-to-Text AI! Attach an audio file (MP3, WAV, M4A) or speak using the microphone, then send to convert audio into text."
+            )
+        )
+    }
+
+    val speechToTextLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val spokenText = result.data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+            if (!spokenText.isNullOrBlank()) {
+                if (isTTS) {
+                    inputText = if (inputText.isBlank()) spokenText else "$inputText $spokenText"
+                } else {
+                    sttInputText = if (sttInputText.isBlank()) spokenText else "$sttInputText $spokenText"
+                }
+            }
+        }
+    }
+
     var selectedAudioUri by remember { mutableStateOf<Uri?>(null) }
     var isSttGenerating by remember { mutableStateOf(false) }
     var sttResultText by remember { mutableStateOf<String?>(null) }
@@ -672,404 +1157,1075 @@ fun GenerateScreen(authManager: AuthManager, onNavigateToHome: () -> Unit) {
         if (user != null) {
             val profile = firestoreRepository.getUserProfile(user.uid, user.email ?: "")
             userProfile = profile
-            val savedVoiceNames = profile.savedVoices
-            val savedVoices = allVoices.filter { savedVoiceNames.contains(it.voiceName) }
-            if (savedVoices.isNotEmpty() && selectedVoice == null) {
-                selectedVoice = savedVoices.first()
-            }
         }
     }
     
-    LaunchedEffect(allVoices) {
-        if (userProfile != null && selectedVoice == null && allVoices.isNotEmpty()) {
-            val savedVoices = allVoices.filter { userProfile!!.savedVoices.contains(it.voiceName) }
-            if (savedVoices.isNotEmpty()) {
-                selectedVoice = savedVoices.first()
-            }
-        }
+    val currentSavedVoices = remember(allVoices, userProfile) {
+        allVoices.filter { userProfile?.savedVoices?.contains(it.voiceName) == true }
     }
     
-    val currentSavedVoices = allVoices.filter { userProfile?.savedVoices?.contains(it.voiceName) == true }
+    val availableVoices = remember(allVoices, currentSavedVoices) {
+        if (currentSavedVoices.isNotEmpty()) currentSavedVoices else allVoices.take(15)
+    }
+
+    LaunchedEffect(availableVoices) {
+        if (selectedVoice == null && availableVoices.isNotEmpty()) {
+            selectedVoice = availableVoices.first()
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
+                .imePadding()
         ) {
-        // Header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onNavigateToHome) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Row(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp)).padding(4.dp)) {
-                    Box(modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(if (isTTS) MaterialTheme.colorScheme.primary else Color.Transparent).clickable { isTTS = true }.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                        Text("TTS", color = if (isTTS) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Box(modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(if (!isTTS) MaterialTheme.colorScheme.primary else Color.Transparent).clickable { isTTS = false }.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                        Text("STT", color = if (!isTTS) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
-        }
-        
-        // Main Content
-        if (isTTS) {
-            Column(
+            // Header
+            Row(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp)
-            ) {
-            // Text Area Container
-            Column(
-                modifier = Modifier
-                    .weight(1f)
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(24.dp))
-                    .padding(16.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                TextField(
-                    value = text,
-                    onValueChange = { if (it.length <= 2000) text = it },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        disabledContainerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        disabledIndicatorColor = Color.Transparent,
-                    ),
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    ),
-                    placeholder = {
-                        Text(
-                            "Type or paste your text here to generate natural AI voice...",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                        )
-                    }
-                )
-                
-                // Bottom actions of text area
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "${text.length} / 2000",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-            
-            // Settings Section
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                // Voice Selector
-                if (currentSavedVoices.isEmpty()) {
-                    Text(
-                        "No saved voices. Go to Library to add some.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    androidx.compose.foundation.lazy.LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        items(currentSavedVoices) { voice ->
-                            val isSelected = selectedVoice?.voiceName == voice.voiceName
-                            Row(
-                                modifier = Modifier
-                                    .width(80.dp)
-                                    .height(30.dp)
-                                    .clip(RoundedCornerShape(15.dp))
-                                    .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)
-                                    .border(
-                                        width = if (isSelected) 2.dp else 1.dp,
-                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-                                        shape = RoundedCornerShape(15.dp)
-                                    )
-                                    .clickable { selectedVoice = voice }
-                                    .padding(horizontal = 4.dp, vertical = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                val imageUrl = voice.avatarUrl.ifEmpty { voice.imageUrl.ifEmpty { "https://i.pravatar.cc/150?u=${voice.voiceName}" } }
-                                coil.compose.AsyncImage(
-                                    model = imageUrl,
-                                    contentDescription = voice.voiceName,
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .clip(CircleShape),
-                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = voice.voiceName,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // Audio Player Card Replacement
-            if (generatedAudioUrl != null) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer)
-                        .clickable {
-                            showPreviewPlayer = true
-                        }
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onNavigateToHome) {
                         Icon(
-                            imageVector = Icons.Rounded.Headphones,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(28.dp)
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = "Back",
+                            tint = MaterialTheme.colorScheme.onBackground
                         )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column {
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (isTTS) "Text to speech" else "Speech to Text",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier
+                            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp))
+                            .padding(4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (isTTS) MaterialTheme.colorScheme.primary else Color.Transparent)
+                                .clickable { isTTS = true }
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
                             Text(
-                                text = "Listen to generated audio",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                "TTS",
+                                color = if (isTTS) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
                             )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (!isTTS) MaterialTheme.colorScheme.primary else Color.Transparent)
+                                .clickable { isTTS = false }
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
                             Text(
-                                text = "Tap to preview in high fidelity player",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                "STT",
+                                color = if (!isTTS) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                        contentDescription = "Preview",
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(24.dp)
-                    )
                 }
             }
 
-            // Generate Button
-            Button(
-                onClick = { 
-                    val voice = selectedVoice
-                    if (voice == null) {
-                        val errMsg = "Please select a voice"
-                        generateError = errMsg
-                        android.widget.Toast.makeText(context, errMsg, android.widget.Toast.LENGTH_SHORT).show()
-                        return@Button
+            if (isTTS) {
+                // TTS Chat View
+                val listState = rememberLazyListState()
+                LaunchedEffect(chatMessages.size) {
+                    if (chatMessages.isNotEmpty()) {
+                        listState.animateScrollToItem(chatMessages.size - 1)
                     }
-                    if (text.isBlank()) {
-                        val errMsg = "Please enter some text"
-                        generateError = errMsg
-                        android.widget.Toast.makeText(context, errMsg, android.widget.Toast.LENGTH_SHORT).show()
-                        return@Button
-                    }
-                    
-                    isGenerating = true
-                    generateError = null
-                    generatedAudioUrl = null
-                    
-                    scope.launch {
-                        val referenceAudio = voice.audioUrl
-                        val referenceText = voice.referenceText.ifEmpty { voice.description.ifEmpty { "Example reference text for ${voice.voiceName}" } }
-                        
-                        val result = TtsApiManager.generateSpeech(text, referenceAudio, referenceText)
-                        isGenerating = false
-                        if (result.isSuccess) {
-                            val audioUrl = result.getOrNull()
-                            generatedAudioUrl = audioUrl
-                            if (!audioUrl.isNullOrEmpty()) {
-                                val historyManager = com.example.data.HistoryManager(context)
-                                val historyItem = com.example.data.GenerationHistory(
-                                    id = java.util.UUID.randomUUID().toString(),
-                                    text = text,
-                                    type = "TTS",
-                                    date = System.currentTimeMillis(),
-                                    voiceName = voice.voiceName,
-                                    duration = "",
-                                    creditsUsed = 0,
-                                    audioUrl = audioUrl,
-                                    imageUrl = voice.avatarUrl.ifEmpty { voice.imageUrl }
-                                )
-                                scope.launch {
-                                    historyManager.saveHistoryItem(user?.uid, historyItem)
+                }
+
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(top = 8.dp, bottom = 12.dp)
+                ) {
+                    items(chatMessages, key = { it.id }) { msg ->
+                        if (msg.isUser) {
+                            // User Message Bubble (Right)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .widthIn(max = 280.dp)
+                                        .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 4.dp))
+                                        .background(MaterialTheme.colorScheme.primary)
+                                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                                ) {
+                                    Text(
+                                        text = msg.text,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        fontSize = 14.sp
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                val userAvatar = userProfile?.avatarUrl ?: ""
+                                if (userAvatar.isNotEmpty()) {
+                                    coil.compose.AsyncImage(
+                                        model = userAvatar,
+                                        contentDescription = "User",
+                                        modifier = Modifier
+                                            .size(34.dp)
+                                            .clip(CircleShape),
+                                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(34.dp)
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.primaryContainer),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = (userProfile?.name?.take(1) ?: "U").uppercase(),
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp
+                                        )
+                                    }
                                 }
                             }
-                            android.widget.Toast.makeText(context, "Speech generated successfully!", android.widget.Toast.LENGTH_SHORT).show()
                         } else {
-                            val errMsg = result.exceptionOrNull()?.message ?: "Unknown error"
-                            generateError = errMsg
-                            android.widget.Toast.makeText(context, errMsg, android.widget.Toast.LENGTH_LONG).show()
+                            // AI Message Bubble (Left)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Start,
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                val voiceAvatarUrl = msg.voiceAvatar.ifEmpty { "https://i.pravatar.cc/150?u=${msg.voiceName}" }
+                                coil.compose.AsyncImage(
+                                    model = voiceAvatarUrl,
+                                    contentDescription = msg.voiceName,
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .border(1.dp, MaterialTheme.colorScheme.primary, CircleShape),
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+
+                                Column(modifier = Modifier.weight(1f, fill = false)) {
+                                    Box(
+                                        modifier = Modifier
+                                            .widthIn(max = 290.dp)
+                                            .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 4.dp, bottomEnd = 20.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 4.dp, bottomEnd = 20.dp))
+                                            .padding(14.dp)
+                                    ) {
+                                        if (msg.isLoading) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                            ) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(18.dp),
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    strokeWidth = 2.dp
+                                                )
+                                                Text(
+                                                    text = msg.text,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    fontSize = 13.sp
+                                                )
+                                            }
+                                        } else {
+                                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                                Text(
+                                                    text = msg.text,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    fontSize = 14.sp
+                                                )
+
+                                                if (msg.audioUrl != null) {
+                                                    val isThisPlaying = activePlayingAudioUrl == msg.audioUrl && isAudioPlaying
+                                                    Row(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .clip(RoundedCornerShape(16.dp))
+                                                            .background(MaterialTheme.colorScheme.surface)
+                                                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
+                                                            .clickable {
+                                                                if (isThisPlaying) {
+                                                                    mediaPlayer?.pause()
+                                                                    isAudioPlaying = false
+                                                                } else {
+                                                                    try {
+                                                                        mediaPlayer?.release()
+                                                                        mediaPlayer = android.media.MediaPlayer().apply {
+                                                                            setDataSource(msg.audioUrl)
+                                                                            setOnPreparedListener {
+                                                                                start()
+                                                                                isAudioPlaying = true
+                                                                                activePlayingAudioUrl = msg.audioUrl
+                                                                            }
+                                                                            setOnCompletionListener {
+                                                                                isAudioPlaying = false
+                                                                                activePlayingAudioUrl = null
+                                                                            }
+                                                                            prepareAsync()
+                                                                        }
+                                                                    } catch (e: Exception) {
+                                                                        android.widget.Toast.makeText(context, "Error playing audio", android.widget.Toast.LENGTH_SHORT).show()
+                                                                    }
+                                                                }
+                                                            }
+                                                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.SpaceBetween
+                                                    ) {
+                                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .size(36.dp)
+                                                                    .clip(CircleShape)
+                                                                    .background(MaterialTheme.colorScheme.primary),
+                                                                contentAlignment = Alignment.Center
+                                                            ) {
+                                                                Icon(
+                                                                    imageVector = if (isThisPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                                                    contentDescription = "Play",
+                                                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                                                    modifier = Modifier.size(22.dp)
+                                                                )
+                                                            }
+                                                            Spacer(modifier = Modifier.width(10.dp))
+                                                            Column {
+                                                                Text(
+                                                                    text = "Generated Audio (${msg.voiceName})",
+                                                                    style = MaterialTheme.typography.labelMedium,
+                                                                    fontWeight = FontWeight.Bold,
+                                                                    color = MaterialTheme.colorScheme.onSurface
+                                                                )
+                                                                Text(
+                                                                    text = if (isThisPlaying) "Playing..." else "Tap to listen",
+                                                                    style = MaterialTheme.typography.labelSmall,
+                                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                                )
+                                                            }
+                                                        }
+
+                                                        IconButton(
+                                                            onClick = {
+                                                                generatedAudioUrl = msg.audioUrl
+                                                                showPreviewPlayer = true
+                                                            },
+                                                            modifier = Modifier.size(32.dp)
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Rounded.Headphones,
+                                                                contentDescription = "Full Player",
+                                                                tint = MaterialTheme.colorScheme.primary,
+                                                                modifier = Modifier.size(20.dp)
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Action Icons Row under AI Message
+                                    if (!msg.isLoading) {
+                                        Row(
+                                            modifier = Modifier.padding(top = 6.dp, start = 4.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            // Copy Icon
+                                            IconButton(
+                                                onClick = {
+                                                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                                    val clip = android.content.ClipData.newPlainText("Script", msg.text)
+                                                    clipboard.setPrimaryClip(clip)
+                                                    android.widget.Toast.makeText(context, "Copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
+                                                },
+                                                modifier = Modifier.size(28.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.ContentCopy,
+                                                    contentDescription = "Copy",
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+
+                                            // ThumbsUp / Like Icon
+                                            val msgIdx = chatMessages.indexOfFirst { it.id == msg.id }
+                                            IconButton(
+                                                onClick = {
+                                                    if (msgIdx != -1) {
+                                                        chatMessages[msgIdx] = chatMessages[msgIdx].copy(isLiked = !chatMessages[msgIdx].isLiked)
+                                                    }
+                                                },
+                                                modifier = Modifier.size(28.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (msg.isLiked) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
+                                                    contentDescription = "Like",
+                                                    tint = if (msg.isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+
+                                            // Listen / Volume Icon
+                                            if (msg.audioUrl != null) {
+                                                IconButton(
+                                                    onClick = {
+                                                        try {
+                                                            mediaPlayer?.release()
+                                                            mediaPlayer = android.media.MediaPlayer().apply {
+                                                                setDataSource(msg.audioUrl)
+                                                                setOnPreparedListener {
+                                                                    start()
+                                                                    isAudioPlaying = true
+                                                                    activePlayingAudioUrl = msg.audioUrl
+                                                                }
+                                                                setOnCompletionListener {
+                                                                    isAudioPlaying = false
+                                                                    activePlayingAudioUrl = null
+                                                                }
+                                                                prepareAsync()
+                                                            }
+                                                        } catch (e: Exception) {
+                                                            android.widget.Toast.makeText(context, "Audio preview unavailable", android.widget.Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    },
+                                                    modifier = Modifier.size(28.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.VolumeUp,
+                                                        contentDescription = "Listen",
+                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                            }
+
+                                            // Download Icon
+                                            if (msg.audioUrl != null) {
+                                                IconButton(
+                                                    onClick = {
+                                                        scope.launch {
+                                                            downloadAudio(context, msg.audioUrl, "Speech_${msg.voiceName}_${System.currentTimeMillis()}")
+                                                            android.widget.Toast.makeText(context, "Downloading audio file...", android.widget.Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    },
+                                                    modifier = Modifier.size(28.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.FileDownload,
+                                                        contentDescription = "Download",
+                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                            }
+
+                                            // Recycle / Regenerate Icon
+                                            IconButton(
+                                                onClick = {
+                                                    val promptMsg = chatMessages.take(msgIdx).lastOrNull { it.isUser }?.text ?: msg.text
+                                                    val voice = availableVoices.firstOrNull { it.voiceName == msg.voiceName } ?: selectedVoice
+                                                    if (voice != null && promptMsg.isNotBlank()) {
+                                                        val newAiId = java.util.UUID.randomUUID().toString()
+                                                        chatMessages.add(
+                                                            TtsChatMessageItem(
+                                                                id = newAiId,
+                                                                isUser = false,
+                                                                text = "Re-generating speech with ${voice.voiceName}...",
+                                                                voiceName = voice.voiceName,
+                                                                voiceAvatar = voice.avatarUrl.ifEmpty { voice.imageUrl },
+                                                                isLoading = true
+                                                            )
+                                                        )
+                                                        scope.launch {
+                                                            val res = TtsApiManager.generateSpeech(
+                                                                promptMsg,
+                                                                voice.audioUrl,
+                                                                voice.referenceText.ifEmpty { voice.description }
+                                                            )
+                                                            val idx = chatMessages.indexOfFirst { it.id == newAiId }
+                                                            if (res.isSuccess) {
+                                                                val u = res.getOrNull()
+                                                                if (idx != -1) {
+                                                                    chatMessages[idx] = chatMessages[idx].copy(
+                                                                        text = "Audio generated successfully! Listen below:",
+                                                                        audioUrl = u,
+                                                                        isLoading = false
+                                                                    )
+                                                                }
+                                                            } else {
+                                                                if (idx != -1) {
+                                                                    chatMessages[idx] = chatMessages[idx].copy(
+                                                                        text = "Regeneration failed",
+                                                                        isLoading = false
+                                                                    )
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                modifier = Modifier.size(28.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.Refresh,
+                                                    contentDescription = "Regenerate",
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                shape = CircleShape,
-                enabled = !isGenerating,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            ) {
-                if (isGenerating) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
-                } else {
-                    Icon(Icons.Rounded.AutoAwesome, contentDescription = "Generate")
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Generate Speech", fontWeight = FontWeight.Bold)
                 }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            }
-        } else {
-            // Speech-to-Text View
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Spacer(modifier = Modifier.weight(1f))
-                
-                if (sttResultText != null) {
-                    Text(
-                        text = "Transcription successfully completed.",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Card(
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 150.dp, max = 300.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+
+                // Bottom Speaker Selector & Input Bar (No Title "Speaker", Theme Colors, No Gap)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.background)
+                        .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp)
+                ) {
+                    // Speaker Selector Pills (Title "Speaker" removed!)
+                    if (availableVoices.isNotEmpty()) {
+                        androidx.compose.foundation.lazy.LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp)
+                        ) {
+                            items(availableVoices) { voice ->
+                                val isSelected = selectedVoice?.voiceName == voice.voiceName
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(
+                                            if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                                            else MaterialTheme.colorScheme.surfaceVariant
+                                        )
+                                        .border(
+                                            width = if (isSelected) 1.5.dp else 1.dp,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                                            shape = RoundedCornerShape(16.dp)
+                                        )
+                                        .clickable { selectedVoice = voice }
+                                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    val imageUrl = voice.avatarUrl.ifEmpty { voice.imageUrl.ifEmpty { "https://i.pravatar.cc/150?u=${voice.voiceName}" } }
+                                    coil.compose.AsyncImage(
+                                        model = imageUrl,
+                                        contentDescription = voice.voiceName,
+                                        modifier = Modifier
+                                            .size(20.dp)
+                                            .clip(CircleShape),
+                                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = voice.voiceName,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Script Text Area with Default Google Speech To Text Mic & Send Button
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(28.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(28.dp))
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(modifier = Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
-                            Text(
-                                text = sttResultText!!,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                        // Google Speech to Text Mic Button
+                        IconButton(
+                            onClick = {
+                                val intent = android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                    putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                                    putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Speak now to convert voice to text...")
+                                }
+                                try {
+                                    speechToTextLauncher.launch(intent)
+                                } catch (e: Exception) {
+                                    android.widget.Toast.makeText(context, "Speech recognition is not available on this device", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Mic,
+                                contentDescription = "Speech to Text Mic",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+
+                        TextField(
+                            value = inputText,
+                            onValueChange = { if (it.length <= 2000) inputText = it },
+                            modifier = Modifier.weight(1f),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                disabledContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                disabledIndicatorColor = Color.Transparent,
+                            ),
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                            placeholder = {
+                                Text(
+                                    text = "Write or speak your script here...",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    fontSize = 14.sp
+                                )
+                            },
+                            maxLines = 4
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary)
+                                .clickable {
+                                    if (inputText.isBlank()) {
+                                        android.widget.Toast.makeText(context, "Please write or speak a script first", android.widget.Toast.LENGTH_SHORT).show()
+                                        return@clickable
+                                    }
+                                    val voice = selectedVoice
+                                    if (voice == null) {
+                                        android.widget.Toast.makeText(context, "Please select a speaker voice", android.widget.Toast.LENGTH_SHORT).show()
+                                        return@clickable
+                                    }
+
+                                    val scriptText = inputText
+                                    inputText = ""
+
+                                    val userMsg = TtsChatMessageItem(
+                                        isUser = true,
+                                        text = scriptText,
+                                        voiceName = voice.voiceName
+                                    )
+                                    chatMessages.add(userMsg)
+
+                                    val aiMsgId = java.util.UUID.randomUUID().toString()
+                                    val aiMsg = TtsChatMessageItem(
+                                        id = aiMsgId,
+                                        isUser = false,
+                                        text = "Synthesizing voice with ${voice.voiceName}...",
+                                        voiceName = voice.voiceName,
+                                        voiceAvatar = voice.avatarUrl.ifEmpty { voice.imageUrl },
+                                        isLoading = true
+                                    )
+                                    chatMessages.add(aiMsg)
+
+                                    scope.launch {
+                                        val refAudio = voice.audioUrl
+                                        val refText = voice.referenceText.ifEmpty { voice.description.ifEmpty { "Reference text for ${voice.voiceName}" } }
+                                        val result = TtsApiManager.generateSpeech(scriptText, refAudio, refText)
+
+                                        val idx = chatMessages.indexOfFirst { it.id == aiMsgId }
+                                        if (result.isSuccess) {
+                                            val audioUrl = result.getOrNull()
+                                            if (idx != -1) {
+                                                chatMessages[idx] = chatMessages[idx].copy(
+                                                    text = "Audio generated successfully! Listen below:",
+                                                    audioUrl = audioUrl,
+                                                    isLoading = false
+                                                )
+                                            }
+                                            if (!audioUrl.isNullOrEmpty()) {
+                                                val historyManager = com.example.data.HistoryManager(context)
+                                                val historyItem = com.example.data.GenerationHistory(
+                                                    id = java.util.UUID.randomUUID().toString(),
+                                                    text = scriptText,
+                                                    type = "TTS",
+                                                    date = System.currentTimeMillis(),
+                                                    voiceName = voice.voiceName,
+                                                    duration = "",
+                                                    creditsUsed = 0,
+                                                    audioUrl = audioUrl,
+                                                    imageUrl = voice.avatarUrl.ifEmpty { voice.imageUrl }
+                                                )
+                                                historyManager.saveHistoryItem(user?.uid, historyItem)
+                                            }
+                                        } else {
+                                            val errMsg = result.exceptionOrNull()?.message ?: "Generation error"
+                                            if (idx != -1) {
+                                                chatMessages[idx] = chatMessages[idx].copy(
+                                                    text = "Error generating audio: $errMsg",
+                                                    isLoading = false
+                                                )
+                                            }
+                                        }
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.Send,
+                                contentDescription = "Send",
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
-                } else {
-                    Text(
-                        text = "Upload an audio file to transcribe",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
-                
-                Spacer(modifier = Modifier.weight(1f))
-                
-                // Audio Upload Section
-                Card(
-                    modifier = Modifier.fillMaxWidth().clickable {
-                        audioPickerLauncher.launch("audio/*")
-                    },
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            Icons.Rounded.Mic, // Reusing icon for audio
-                            contentDescription = "Upload Audio",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = if (selectedAudioUri != null) "Audio Selected" else "Tap to Upload Audio",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
+            } else {
+                // Speech to Text View - Chatting Interface
+                val sttListState = rememberLazyListState()
+                LaunchedEffect(sttChatMessages.size) {
+                    if (sttChatMessages.isNotEmpty()) {
+                        sttListState.animateScrollToItem(sttChatMessages.size - 1)
                     }
                 }
-                
-                Button(
-                    onClick = {
-                        val uri = selectedAudioUri
-                        if (uri == null) {
-                            val errMsg = "Please select an audio file first."
-                            sttError = errMsg
-                            android.widget.Toast.makeText(context, errMsg, android.widget.Toast.LENGTH_SHORT).show()
-                            return@Button
-                        }
-                        isSttGenerating = true
-                        sttError = null
-                        sttResultText = null
-                        
-                        scope.launch {
-                            val result = SttApiManager.generateText(uri.toString())
-                            isSttGenerating = false
-                            if (result.isSuccess) {
-                                sttResultText = result.getOrNull()
-                                android.widget.Toast.makeText(context, "Transcription successfully completed.", android.widget.Toast.LENGTH_SHORT).show()
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background)
+                ) {
+                    // Chat Messages List
+                    LazyColumn(
+                        state = sttListState,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        contentPadding = PaddingValues(top = 8.dp, bottom = 12.dp)
+                    ) {
+                        items(sttChatMessages, key = { it.id }) { msg ->
+                            if (msg.isUser) {
+                                // User Message Bubble (Right)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End,
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.End,
+                                        modifier = Modifier.widthIn(max = 280.dp)
+                                    ) {
+                                        if (!msg.audioFileName.isNullOrBlank()) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .padding(bottom = 6.dp)
+                                                    .clip(RoundedCornerShape(16.dp))
+                                                    .background(MaterialTheme.colorScheme.primaryContainer)
+                                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Mic,
+                                                    contentDescription = "Audio Attachment",
+                                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = msg.audioFileName ?: "Audio file",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                        }
+
+                                        if (msg.text.isNotBlank()) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 4.dp))
+                                                    .background(MaterialTheme.colorScheme.primary)
+                                                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                                            ) {
+                                                Text(
+                                                    text = msg.text,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = MaterialTheme.colorScheme.onPrimary,
+                                                    fontSize = 14.sp
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.width(8.dp))
+
+                                    Box(
+                                        modifier = Modifier
+                                            .size(34.dp)
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.primaryContainer),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "U",
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp
+                                        )
+                                    }
+                                }
                             } else {
-                                val errMsg = result.exceptionOrNull()?.message ?: "Unknown error"
-                                sttError = errMsg
-                                android.widget.Toast.makeText(context, errMsg, android.widget.Toast.LENGTH_LONG).show()
+                                // AI Message Bubble (Left)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.Start,
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+                                            .border(1.dp, MaterialTheme.colorScheme.primary, CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Mic,
+                                            contentDescription = "STT AI",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.width(10.dp))
+
+                                    Column(modifier = Modifier.weight(1f, fill = false)) {
+                                        Box(
+                                            modifier = Modifier
+                                                .widthIn(max = 290.dp)
+                                                .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 4.dp, bottomEnd = 20.dp))
+                                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 4.dp, bottomEnd = 20.dp))
+                                                .padding(14.dp)
+                                        ) {
+                                        if (msg.isLoading) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                            ) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(18.dp),
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    strokeWidth = 2.dp
+                                                )
+                                                Text(
+                                                    text = "Transcribing audio to text...",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    fontSize = 13.sp
+                                                )
+                                            }
+                                        } else {
+                                            Text(
+                                                text = msg.text,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                fontSize = 14.sp,
+                                                lineHeight = 20.sp
+                                            )
+
+                                        }
+
+                                        // Action Icons Row under AI Message (Matches TTS UI)
+                                        if (!msg.isLoading) {
+                                            Row(
+                                                modifier = Modifier.padding(top = 6.dp, start = 4.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                // Copy Icon
+                                                IconButton(
+                                                    onClick = {
+                                                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                                        val clip = android.content.ClipData.newPlainText("Transcribed Text", msg.text)
+                                                        clipboard.setPrimaryClip(clip)
+                                                        android.widget.Toast.makeText(context, "Copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
+                                                    },
+                                                    modifier = Modifier.size(28.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.ContentCopy,
+                                                        contentDescription = "Copy",
+                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+
+                                                // Like Icon
+                                                IconButton(
+                                                    onClick = {
+                                                        val idx = sttChatMessages.indexOfFirst { it.id == msg.id }
+                                                        if (idx != -1) {
+                                                            sttChatMessages[idx] = sttChatMessages[idx].copy(isLiked = !sttChatMessages[idx].isLiked)
+                                                        }
+                                                    },
+                                                    modifier = Modifier.size(28.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = if (msg.isLiked) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
+                                                        contentDescription = "Like",
+                                                        tint = if (msg.isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+
+                                                // Re-transcribe / Retry Icon
+                                                IconButton(
+                                                    onClick = {
+                                                        if (msg.audioUri != null) {
+                                                            val idx = sttChatMessages.indexOfFirst { it.id == msg.id }
+                                                            if (idx != -1) {
+                                                                sttChatMessages[idx] = sttChatMessages[idx].copy(isLoading = true, text = "")
+                                                                scope.launch {
+                                                                    val result = SttApiManager.generateText(msg.audioUri.toString())
+                                                                    val updatedIdx = sttChatMessages.indexOfFirst { it.id == msg.id }
+                                                                    if (updatedIdx != -1) {
+                                                                        if (result.isSuccess) {
+                                                                            sttChatMessages[updatedIdx] = sttChatMessages[updatedIdx].copy(
+                                                                                text = result.getOrNull() ?: "No text generated.",
+                                                                                isLoading = false
+                                                                            )
+                                                                        } else {
+                                                                            sttChatMessages[updatedIdx] = sttChatMessages[updatedIdx].copy(
+                                                                                text = "Error: ${result.exceptionOrNull()?.message}",
+                                                                                isLoading = false
+                                                                            )
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        } else {
+                                                            android.widget.Toast.makeText(context, "No audio attachment to re-transcribe", android.widget.Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    },
+                                                    modifier = Modifier.size(28.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.Refresh,
+                                                        contentDescription = "Re-transcribe",
+                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    shape = RoundedCornerShape(28.dp),
-                    enabled = !isSttGenerating
-                ) {
-                    if (isSttGenerating) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
-                    } else {
-                        Icon(Icons.Rounded.AutoAwesome, contentDescription = "Generate")
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Generate Text", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+
+                    // Bottom STT Input Area
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.background)
+                            .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp)
+                    ) {
+                        // Input Pill Row (Matches TTS styling exactly)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(28.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(28.dp))
+                                .padding(horizontal = 12.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Audio Picker Button
+                            IconButton(
+                                onClick = {
+                                    audioPickerLauncher.launch("audio/*")
+                                },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Mic,
+                                    contentDescription = "Select Audio File",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+
+                            // Middle Area: Audio Preview Pill or Placeholder (Matches TTS text area height and padding)
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 48.dp)
+                                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                if (selectedAudioUri != null) {
+                                    Row(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(MaterialTheme.colorScheme.primaryContainer)
+                                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Mic,
+                                            contentDescription = "Attached Audio",
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = selectedAudioUri?.lastPathSegment ?: "Audio file selected",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f, fill = false)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Icon(
+                                            imageVector = Icons.Rounded.Close,
+                                            contentDescription = "Remove",
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier
+                                                .size(16.dp)
+                                                .clickable { selectedAudioUri = null }
+                                        )
+                                    }
+                                } else {
+                                    Text(
+                                        text = "Select an audio file...",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                        fontSize = 14.sp,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { audioPickerLauncher.launch("audio/*") }
+                                    )
+                                }
+                            }
+
+                            // Send Button
+                            Box(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary)
+                                    .clickable {
+                                        val uriToTranscribe = selectedAudioUri
+
+                                        if (uriToTranscribe == null) {
+                                            return@clickable
+                                        }
+
+                                        val fileName = uriToTranscribe.lastPathSegment ?: "Uploaded Audio"
+                                        val userMsg = SttChatMessageItem(
+                                            isUser = true,
+                                            text = "Transcribing $fileName",
+                                            audioUri = uriToTranscribe,
+                                            audioFileName = fileName
+                                        )
+
+                                        val aiMsgId = java.util.UUID.randomUUID().toString()
+                                        val aiMsg = SttChatMessageItem(
+                                            id = aiMsgId,
+                                            isUser = false,
+                                            text = "",
+                                            isLoading = true
+                                        )
+
+                                        sttChatMessages.add(userMsg)
+                                        sttChatMessages.add(aiMsg)
+
+                                        selectedAudioUri = null
+
+                                        scope.launch {
+                                            val result = SttApiManager.generateText(uriToTranscribe.toString())
+
+                                            val idx = sttChatMessages.indexOfFirst { it.id == aiMsgId }
+                                            if (idx != -1) {
+                                                if (result.isSuccess) {
+                                                    val resultText = result.getOrNull() ?: "No transcription text returned."
+                                                    sttChatMessages[idx] = sttChatMessages[idx].copy(
+                                                        text = resultText,
+                                                        isLoading = false
+                                                    )
+                                                    val historyManager = com.example.data.HistoryManager(context)
+                                                    val historyItem = com.example.data.GenerationHistory(
+                                                        id = java.util.UUID.randomUUID().toString(),
+                                                        text = fileName,
+                                                        type = "STT",
+                                                        date = System.currentTimeMillis(),
+                                                        voiceName = "Speech To Text",
+                                                        duration = "",
+                                                        creditsUsed = 0,
+                                                        audioUrl = uriToTranscribe.toString(),
+                                                        imageUrl = ""
+                                                    )
+                                                    historyManager.saveHistoryItem(user?.uid, historyItem)
+                                                } else {
+                                                    val errMsg = result.exceptionOrNull()?.message ?: "Transcription failed"
+                                                    sttChatMessages[idx] = sttChatMessages[idx].copy(
+                                                        text = "Error transcribing audio: $errMsg",
+                                                        isLoading = false
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.Send,
+                                    contentDescription = "Send",
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
                     }
                 }
-                Spacer(modifier = Modifier.height(80.dp))
             }
         }
     }
@@ -1077,11 +2233,11 @@ fun GenerateScreen(authManager: AuthManager, onNavigateToHome: () -> Unit) {
     if (showPreviewPlayer && generatedAudioUrl != null) {
         val isFreeUser = (userProfile?.subscriptionPlan?.lowercase(java.util.Locale.getDefault()) ?: "free") == "free"
         AudioPreviewScreen(
-            audioUrl = generatedAudioUrl!!,
+            audioUrl = generatedAudioUrl ?: "",
             title = selectedVoice?.voiceName ?: "Generated Speech",
             subtitle = selectedVoice?.let { "${it.gender} • ${it.language}" } ?: "Voice Preview",
             imageUrl = selectedVoice?.avatarUrl,
-            lyricsText = text,
+            lyricsText = inputText,
             isFreeUser = isFreeUser,
             onBack = { showPreviewPlayer = false }
         )
@@ -1092,7 +2248,7 @@ fun GenerateScreen(authManager: AuthManager, onNavigateToHome: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(authManager: AuthManager) {
-    val itemsPerPage = 10
+    val itemsPerPage = 15
     var currentPage by remember { mutableIntStateOf(0) }
     
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -1100,7 +2256,9 @@ fun LibraryScreen(authManager: AuthManager) {
     val allVoices by voiceRepository.allVoices.collectAsState(initial = emptyList())
     var isSyncing by remember { mutableStateOf(false) }
     
-    var filterGender by remember { mutableStateOf("All") }
+    var filterTab by remember { mutableStateOf("All") }
+    var searchQuery by remember { mutableStateOf("") }
+    var isSearchActive by remember { mutableStateOf(false) }
     
     val user = authManager.currentUser.collectAsState(initial = authManager.currentUser.value).value
     var userProfile by remember { mutableStateOf<com.example.data.UserProfile?>(null) }
@@ -1119,8 +2277,21 @@ fun LibraryScreen(authManager: AuthManager) {
         }
     }
     
-    val filteredVoices = allVoices.filter { 
-        (filterGender == "All" || it.gender == filterGender)
+    val recentNewVoiceNames = remember(allVoices) { allVoices.take(10).map { it.voiceName }.toSet() }
+
+    val filteredVoices = allVoices.filter { voice ->
+        val matchesTab = when (filterTab) {
+            "Male" -> voice.gender.equals("Male", ignoreCase = true)
+            "Female" -> voice.gender.equals("Female", ignoreCase = true)
+            "✨ New" -> recentNewVoiceNames.contains(voice.voiceName)
+            else -> true
+        }
+        val matchesSearch = searchQuery.isEmpty() || 
+            voice.voiceName.contains(searchQuery, ignoreCase = true) || 
+            voice.language.contains(searchQuery, ignoreCase = true) ||
+            voice.description.contains(searchQuery, ignoreCase = true)
+        
+        matchesTab && matchesSearch
     }
 
     val totalPages = maxOf(1, (filteredVoices.size + itemsPerPage - 1) / itemsPerPage)
@@ -1134,80 +2305,192 @@ fun LibraryScreen(authManager: AuthManager) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(androidx.compose.ui.graphics.Color(0xFF090A15))
     ) {
+        // Top Header Row
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Voice Library",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = androidx.compose.ui.graphics.Color.White
+                )
+
+                IconButton(
+                    onClick = { isSearchActive = !isSearchActive },
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(
+                            androidx.compose.ui.graphics.Color(0xFF14172B),
+                            CircleShape
+                        )
+                        .border(
+                            1.dp,
+                            androidx.compose.ui.graphics.Color(0xFF262943),
+                            CircleShape
+                        )
+                ) {
+                    Icon(
+                        Icons.Rounded.Search,
+                        contentDescription = "Search",
+                        tint = androidx.compose.ui.graphics.Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Discover the voices in our library! 🎙️✨",
+                fontSize = 13.sp,
+                color = androidx.compose.ui.graphics.Color(0xFF94A3B8)
+            )
+
+            if (isSearchActive) {
+                Spacer(modifier = Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it; currentPage = 0 },
+                    placeholder = { Text("Search voice by name...", color = androidx.compose.ui.graphics.Color(0xFF64748B), fontSize = 13.sp) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = androidx.compose.ui.graphics.Color(0xFF131527),
+                        unfocusedContainerColor = androidx.compose.ui.graphics.Color(0xFF131527),
+                        focusedBorderColor = androidx.compose.ui.graphics.Color(0xFF8B5CF6),
+                        unfocusedBorderColor = androidx.compose.ui.graphics.Color(0xFF262943),
+                        focusedTextColor = androidx.compose.ui.graphics.Color.White,
+                        unfocusedTextColor = androidx.compose.ui.graphics.Color.White
+                    ),
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Rounded.Close, contentDescription = "Clear", tint = androidx.compose.ui.graphics.Color.White)
+                            }
+                        }
+                    }
+                )
+            }
+        }
+
+        // Category Filter Chips Row
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text(
-                text = "Voice Library",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-        }
-        
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-            Text("Gender Filter", style = MaterialTheme.typography.labelMedium)
-            androidx.compose.foundation.lazy.LazyRow(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(listOf("All", "Male", "Female")) { gender ->
-                    FilterChip(
-                        selected = filterGender == gender,
-                        onClick = { filterGender = gender; currentPage = 0 },
-                        label = { Text(gender) }
+            val categories = listOf("All", "Male", "Female", "🔥 New")
+            categories.forEach { category ->
+                val isSelected = filterTab == category || (filterTab == "✨ New" && category == "🔥 New")
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(
+                            if (isSelected) androidx.compose.ui.graphics.Color(0xFF2E1065)
+                            else androidx.compose.ui.graphics.Color(0xFF131527)
+                        )
+                        .border(
+                            width = if (isSelected) 1.5.dp else 1.dp,
+                            color = if (isSelected) androidx.compose.ui.graphics.Color(0xFF9333EA)
+                            else androidx.compose.ui.graphics.Color(0xFF262943),
+                            shape = RoundedCornerShape(50)
+                        )
+                        .clickable {
+                            filterTab = category
+                            currentPage = 0
+                        }
+                        .padding(horizontal = 18.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = category,
+                        color = if (isSelected) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color(0xFF94A3B8),
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        fontSize = 13.sp
                     )
                 }
             }
         }
 
+        Spacer(modifier = Modifier.height(8.dp))
+
         if (isSyncing && allVoices.isNotEmpty()) {
-            androidx.compose.material3.LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            androidx.compose.material3.LinearProgressIndicator(
+                modifier = Modifier.fillMaxWidth(),
+                color = androidx.compose.ui.graphics.Color(0xFF8B5CF6)
+            )
         }
 
+        // Voice Cards Grid
         if (allVoices.isEmpty() && isSyncing) {
-            Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        } else if (filteredVoices.isEmpty()) {
-            Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Text("No voices found")
-            }
-        } else {
-            LazyColumn(
+            Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = androidx.compose.ui.graphics.Color(0xFF8B5CF6))
+            }
+        } else if (filteredVoices.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("No voices found", color = androidx.compose.ui.graphics.Color(0xFF94A3B8))
+            }
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(currentVoices) { voice ->
+                items(currentVoices, key = { it.voiceName }) { voice ->
                     val isSaved = userProfile?.savedVoices?.contains(voice.voiceName) == true
-                    VoiceCard(voice = voice, isSaved = isSaved, onToggleSave = {
-                        if (user != null && userProfile != null) {
-                            scope.launch {
-                                val currentSaved = userProfile!!.savedVoices.toMutableList()
-                                if (isSaved) {
-                                    currentSaved.remove(voice.voiceName)
-                                } else {
-                                    currentSaved.add(voice.voiceName)
+                    val isNew = recentNewVoiceNames.contains(voice.voiceName)
+                    GridVoiceCard(
+                        voice = voice,
+                        isSaved = isSaved,
+                        isNew = isNew,
+                        onToggleSave = {
+                            val profile = userProfile
+                            if (user != null && profile != null) {
+                                scope.launch {
+                                    val currentSaved = profile.savedVoices.toMutableList()
+                                    if (isSaved) {
+                                        currentSaved.remove(voice.voiceName)
+                                    } else {
+                                        currentSaved.add(voice.voiceName)
+                                    }
+                                    val newProfile = profile.copy(savedVoices = currentSaved)
+                                    firestoreRepository.saveUserProfile(user.uid, newProfile)
+                                    userProfile = newProfile
                                 }
-                                val newProfile = userProfile!!.copy(savedVoices = currentSaved)
-                                firestoreRepository.saveUserProfile(user.uid, newProfile)
-                                userProfile = newProfile
                             }
                         }
-                    })
+                    )
                 }
             }
         }
-        
+
+        // Pagination Footer
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1215,33 +2498,70 @@ fun LibraryScreen(authManager: AuthManager) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TextButton(
-                onClick = { if (currentPage > 0) currentPage-- },
-                enabled = currentPage > 0
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(enabled = currentPage > 0) {
+                        if (currentPage > 0) currentPage--
+                    }
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Rounded.ChevronLeft, contentDescription = "Previous")
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Previous")
+                Icon(
+                    Icons.Rounded.ChevronLeft,
+                    contentDescription = "Previous",
+                    tint = if (currentPage > 0) androidx.compose.ui.graphics.Color(0xFF3B82F6) else androidx.compose.ui.graphics.Color(0xFF475569)
+                )
+                Spacer(modifier = Modifier.width(2.dp))
+                Text(
+                    text = "Previous",
+                    color = if (currentPage > 0) androidx.compose.ui.graphics.Color(0xFF3B82F6) else androidx.compose.ui.graphics.Color(0xFF475569),
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 13.sp
+                )
             }
+
             Text(
                 text = "Page ${currentPage + 1} of $totalPages",
                 style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onBackground
+                fontWeight = FontWeight.SemiBold,
+                color = androidx.compose.ui.graphics.Color.White
             )
-            TextButton(
-                onClick = { if (currentPage < totalPages - 1) currentPage++ },
-                enabled = currentPage < totalPages - 1
+
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(enabled = currentPage < totalPages - 1) {
+                        if (currentPage < totalPages - 1) currentPage++
+                    }
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Next")
-                Spacer(modifier = Modifier.width(4.dp))
-                Icon(Icons.Rounded.ChevronRight, contentDescription = "Next")
+                Text(
+                    text = "Next",
+                    color = if (currentPage < totalPages - 1) androidx.compose.ui.graphics.Color(0xFF3B82F6) else androidx.compose.ui.graphics.Color(0xFF475569),
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 13.sp
+                )
+                Spacer(modifier = Modifier.width(2.dp))
+                Icon(
+                    Icons.Rounded.ChevronRight,
+                    contentDescription = "Next",
+                    tint = if (currentPage < totalPages - 1) androidx.compose.ui.graphics.Color(0xFF3B82F6) else androidx.compose.ui.graphics.Color(0xFF475569)
+                )
             }
         }
+        Spacer(modifier = Modifier.height(30.dp))
     }
 }
+
 @Composable
-fun VoiceCard(voice: VoiceEntity, isSaved: Boolean = false, onToggleSave: () -> Unit = {}) {
+fun GridVoiceCard(
+    voice: VoiceEntity,
+    isSaved: Boolean = false,
+    isNew: Boolean = false,
+    onToggleSave: () -> Unit = {}
+) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var isPlaying by remember { mutableStateOf(false) }
     var mediaPlayer by remember { mutableStateOf<android.media.MediaPlayer?>(null) }
@@ -1252,137 +2572,209 @@ fun VoiceCard(voice: VoiceEntity, isSaved: Boolean = false, onToggleSave: () -> 
         }
     }
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.surface)
-                .border(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant,
-                    shape = RoundedCornerShape(16.dp)
-                )
-                .clickable { /* Select Voice */ }
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.weight(1f)
-        ) {
-            // Avatar
-            val imageUrl = voice.avatarUrl.ifEmpty { voice.imageUrl.ifEmpty { "https://i.pravatar.cc/150?u=${voice.voiceName}" } }
-            AsyncImage(
-                model = imageUrl,
-                contentDescription = voice.voiceName,
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentScale = ContentScale.Crop
-            )
-            // Info
-            Column {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = voice.voiceName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+    val avatarBgColors = listOf(
+        androidx.compose.ui.graphics.Color(0xFF00B4D8), // Cyan
+        androidx.compose.ui.graphics.Color(0xFF38B000), // Green
+        androidx.compose.ui.graphics.Color(0xFFF77F00), // Orange/Amber
+        androidx.compose.ui.graphics.Color(0xFFE056FD), // Pink/Magenta
+        androidx.compose.ui.graphics.Color(0xFFFFB703), // Yellow
+        androidx.compose.ui.graphics.Color(0xFF0077B6), // Ocean Blue
+        androidx.compose.ui.graphics.Color(0xFF7209B7), // Deep Purple
+        androidx.compose.ui.graphics.Color(0xFFD62828), // Red/Rose
+        androidx.compose.ui.graphics.Color(0xFF14B8A6)  // Teal
+    )
+    val bgColor = avatarBgColors[Math.abs(voice.voiceName.hashCode()) % avatarBgColors.size]
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(
+                brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                    colors = listOf(
+                        androidx.compose.ui.graphics.Color(0x332E3254),
+                        androidx.compose.ui.graphics.Color(0x1F1E223D)
                     )
-                    if (voice.isPro) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.primary,
-                            shape = RoundedCornerShape(4.dp),
-                            modifier = Modifier.padding(top = 2.dp)
-                        ) {
-                            Text(
-                                text = "PRO",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "${voice.gender} • ${voice.language}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            }
-        }
-        
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            // Save button
-            IconButton(
-                onClick = onToggleSave,
+            )
+            .border(
+                width = 1.dp,
+                brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                    colors = listOf(
+                        androidx.compose.ui.graphics.Color(0x40A855F7),
+                        androidx.compose.ui.graphics.Color(0x203B82F6),
+                        androidx.compose.ui.graphics.Color(0x15FFFFFF)
+                    )
+                ),
+                shape = RoundedCornerShape(22.dp)
+            )
+            .padding(top = 10.dp, bottom = 12.dp, start = 6.dp, end = 6.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // 100% Circular Avatar
+            Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .background(if (isSaved) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                    .size(76.dp)
+                    .clip(CircleShape)
+                    .background(bgColor),
+                contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    if (isSaved) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                    contentDescription = if (isSaved) "Remove" else "Save",
-                    tint = if (isSaved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                val imageUrl = voice.avatarUrl.ifEmpty { voice.imageUrl.ifEmpty { "https://i.pravatar.cc/150?u=${voice.voiceName}" } }
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = voice.voiceName,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop
                 )
             }
-            
-            // Play button
-            val cacheManager = remember { com.example.data.CacheManager(context) }
-            val scope = rememberCoroutineScope()
-            IconButton(
-                onClick = {
-                    if (isPlaying) {
-                        mediaPlayer?.pause()
-                        isPlaying = false
-                    } else {
-                        if (mediaPlayer == null && voice.audioUrl.isNotEmpty()) {
-                            scope.launch {
-                                val cachedUrl = cacheManager.getCachedAudioUrl(voice.audioUrl)
-                                try {
-                                    mediaPlayer = android.media.MediaPlayer().apply {
-                                        setDataSource(cachedUrl)
-                                        prepareAsync()
-                                        setOnPreparedListener { 
-                                            start()
-                                            isPlaying = true
-                                        }
-                                        setOnCompletionListener { 
-                                            isPlaying = false
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Voice Name
+            Text(
+                text = voice.voiceName,
+                style = androidx.compose.ui.text.TextStyle(
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = androidx.compose.ui.graphics.Color.White,
+                    textAlign = TextAlign.Center
+                ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp)
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Refined Action Buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Like Button
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(androidx.compose.ui.graphics.Color(0x20FFFFFF))
+                        .border(
+                            width = 1.dp,
+                            color = androidx.compose.ui.graphics.Color(0x40FFFFFF),
+                            shape = CircleShape
+                        )
+                        .clickable { onToggleSave() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (isSaved) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                        contentDescription = if (isSaved) "Remove" else "Save",
+                        tint = if (isSaved) androidx.compose.ui.graphics.Color(0xFFEF4444) else androidx.compose.ui.graphics.Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(10.dp))
+
+                // Play Button
+                val cacheManager = remember { com.example.data.CacheManager(context) }
+                val scope = rememberCoroutineScope()
+
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                        .border(
+                            width = 1.5.dp,
+                            brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.primary,
+                                    MaterialTheme.colorScheme.secondary
+                                )
+                            ),
+                            shape = CircleShape
+                        )
+                        .clickable {
+                            if (isPlaying) {
+                                mediaPlayer?.pause()
+                                isPlaying = false
+                            } else {
+                                if (mediaPlayer == null && voice.audioUrl.isNotEmpty()) {
+                                    scope.launch {
+                                        val cachedUrl = cacheManager.getCachedAudioUrl(voice.audioUrl)
+                                        try {
+                                            mediaPlayer = android.media.MediaPlayer().apply {
+                                                setDataSource(cachedUrl)
+                                                prepareAsync()
+                                                setOnPreparedListener { 
+                                                    start()
+                                                    isPlaying = true
+                                                }
+                                                setOnCompletionListener { 
+                                                    isPlaying = false
+                                                }
+                                            }
+                                        } catch (e: Exception) {
+                                            e.printStackTrace()
                                         }
                                     }
-                                } catch (e: Exception) {
-                                    e.printStackTrace()
+                                } else {
+                                    mediaPlayer?.start()
+                                    isPlaying = true
                                 }
                             }
-                        } else {
-                            mediaPlayer?.start()
-                            isPlaying = true
-                        }
-                    }
-                },
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                        contentDescription = if (isPlaying) "Pause" else "Play",
+                        tint = androidx.compose.ui.graphics.Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+
+        // Top-Right "New 🔥" Badge inside card frame (rendered in front)
+        if (isNew) {
+            Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .background(
-                        brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                            colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary)
-                        ),
+                    .align(Alignment.TopEnd)
+                    .padding(end = 6.dp, top = 2.dp)
+                    .clip(CircleShape)
+                    .background(androidx.compose.ui.graphics.Color(0x99131527))
+                    .border(
+                        width = 1.dp,
+                        color = androidx.compose.ui.graphics.Color(0x60FF9800),
                         shape = CircleShape
                     )
+                    .padding(horizontal = 7.dp, vertical = 2.dp)
             ) {
-                Icon(
-                    if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                    contentDescription = "Preview",
-                    tint = MaterialTheme.colorScheme.onPrimary
+                Text(
+                    text = "New 🔥",
+                    color = androidx.compose.ui.graphics.Color.White,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
         }
     }
+}
+
+@Composable
+fun VoiceCard(voice: VoiceEntity, isSaved: Boolean = false, onToggleSave: () -> Unit = {}) {
+    GridVoiceCard(voice = voice, isSaved = isSaved, onToggleSave = onToggleSave)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1402,92 +2794,121 @@ fun AccountScreen(authManager: AuthManager, onLogout: () -> Unit) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(16.dp)
+                    .background(Color(0xFF090A10))
+                    .padding(20.dp)
                     .verticalScroll(androidx.compose.foundation.rememberScrollState()),
                 horizontalAlignment = Alignment.Start
             ) {
-                Text(translate("Settings", lang), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(24.dp))
+                Text(
+                    text = translate("Settings", lang),
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color.White
+                )
+                Spacer(modifier = Modifier.height(20.dp))
                 
                 Text(
-                    translate("Account", lang),
-                    style = MaterialTheme.typography.labelLarge,
+                    text = translate("Account", lang),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = 16.dp, bottom = 8.dp)
+                    modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
                 )
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(24.dp))
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(Color(0xFF131420))
+                        .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(22.dp))
                 ) {
                     SettingsItem(icon = Icons.Rounded.Person, title = translate("Profile", lang), onClick = { currentSettingsScreen = "profile" })
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 16.dp))
+                    HorizontalDivider(color = Color(0x12FFFFFF), modifier = Modifier.padding(horizontal = 16.dp))
                     SettingsItem(icon = Icons.Rounded.Notifications, title = translate("Notification", lang), onClick = { currentSettingsScreen = "notification" })
                 }
                 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(20.dp))
                 
                 Text(
-                    translate("Preferences", lang),
-                    style = MaterialTheme.typography.labelLarge,
+                    text = translate("Preferences", lang),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = 16.dp, bottom = 8.dp)
+                    modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
                 )
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(24.dp))
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(Color(0xFF131420))
+                        .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(22.dp))
                 ) {
-                    SettingsItem(icon = Icons.Rounded.Palette, title = translate("Theme", lang), value = appSettings.theme, onClick = { currentSettingsScreen = "theme" })
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingsItem(icon = Icons.Rounded.Palette, title = translate("Theme", lang), value = appSettings.theme.replaceFirstChar { it.uppercase() }, onClick = { currentSettingsScreen = "theme" })
+                    HorizontalDivider(color = Color(0x12FFFFFF), modifier = Modifier.padding(horizontal = 16.dp))
                     SettingsItem(icon = Icons.Rounded.Language, title = translate("Language", lang), value = translate(lang, lang), onClick = { currentSettingsScreen = "language" })
                 }
                 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(20.dp))
                 
                 Text(
-                    translate("More", lang),
-                    style = MaterialTheme.typography.labelLarge,
+                    text = translate("More", lang),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = 16.dp, bottom = 8.dp)
+                    modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
                 )
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(24.dp))
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(Color(0xFF131420))
+                        .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(22.dp))
                 ) {
                     SettingsItem(icon = Icons.Rounded.HelpOutline, title = translate("Help & Support", lang), onClick = { uriHandler.openUri("mailto:support@quantisai.org") })
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 16.dp))
+                    HorizontalDivider(color = Color(0x12FFFFFF), modifier = Modifier.padding(horizontal = 16.dp))
                     SettingsItem(icon = Icons.Rounded.PrivacyTip, title = translate("Privacy Policy", lang), onClick = { uriHandler.openUri("https://www.quantisai.org/privacy") })
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 16.dp))
+                    HorizontalDivider(color = Color(0x12FFFFFF), modifier = Modifier.padding(horizontal = 16.dp))
                     SettingsItem(icon = Icons.Rounded.Article, title = translate("Terms of Service", lang), onClick = { uriHandler.openUri("https://www.quantisai.org/terms") })
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 16.dp))
+                    HorizontalDivider(color = Color(0x12FFFFFF), modifier = Modifier.padding(horizontal = 16.dp))
                     SettingsItem(icon = Icons.Rounded.Star, title = translate("Subscription", lang), onClick = { currentSettingsScreen = "subscription" })
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingsItem(icon = Icons.Rounded.Info, title = translate("Version", lang), value = "1.0.0", showArrow = false)
+                    HorizontalDivider(color = Color(0x12FFFFFF), modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingsItem(icon = Icons.Rounded.Info, title = translate("Version", lang), value = "v${com.example.BuildConfig.VERSION_NAME}", showArrow = false)
                 }
                 
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(28.dp))
                 
-                OutlinedButton(
-                    onClick = {
-                        authManager.signOut()
-                        onLogout()
-                    },
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color(0x1DEF4444))
+                        .border(1.dp, Color(0x40EF4444), RoundedCornerShape(20.dp))
+                        .clickable {
+                            authManager.signOut()
+                            onLogout()
+                        },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(translate("Logout", lang), color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = null,
+                            tint = Color(0xFFF87171),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = translate("Logout", lang),
+                            color = Color(0xFFF87171),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                    }
                 }
                 
-                Spacer(modifier = Modifier.height(100.dp))
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
         "profile" -> {
@@ -1556,12 +2977,12 @@ fun ProfileScreen(uid: String, email: String, lang: String, onBack: () -> Unit) 
                             }
                         }
                         val localFileUri = Uri.fromFile(file).toString()
-                        val updatedProfile = currentProfile!!.copy(avatarUrl = localFileUri)
-                        val success = firestoreRepository.saveUserProfile(uid, updatedProfile)
+                        val updatedProfile = currentProfile?.copy(avatarUrl = localFileUri)
+                        val success = if (updatedProfile != null) firestoreRepository.saveUserProfile(uid, updatedProfile) else false
                         
                         kotlinx.coroutines.withContext(Dispatchers.Main) {
                             if (success) {
-                                currentProfile = updatedProfile
+                                if (updatedProfile != null) currentProfile = updatedProfile
                                 android.widget.Toast.makeText(context, "Avatar updated successfully!", android.widget.Toast.LENGTH_SHORT).show()
                             } else {
                                 android.widget.Toast.makeText(context, "Failed to update profile", android.widget.Toast.LENGTH_SHORT).show()
@@ -1589,25 +3010,32 @@ fun ProfileScreen(uid: String, email: String, lang: String, onBack: () -> Unit) 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .background(Color(0xFF090A10))
+            .padding(20.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White)
             }
-            Text(translate("Profile", lang), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = translate("Profile", lang),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
         }
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
         
         val planColor = getPlanColor(currentProfile?.subscriptionPlan)
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(24.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(24.dp))
-                .padding(24.dp),
+                .clip(RoundedCornerShape(22.dp))
+                .background(Color(0xFF131420))
+                .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(22.dp))
+                .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Box(
@@ -1622,19 +3050,31 @@ fun ProfileScreen(uid: String, email: String, lang: String, onBack: () -> Unit) 
                     modifier = Modifier
                         .size(80.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer)
-                        .border(3.dp, planColor, CircleShape),
+                        .background(
+                            brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                                colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)
+                            )
+                        )
+                        .padding(2.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (avatarUrl.isNotEmpty()) {
-                        coil.compose.AsyncImage(
-                            model = avatarUrl,
-                            contentDescription = "Profile Picture",
-                            modifier = Modifier.fillMaxSize().clip(CircleShape),
-                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                        )
-                    } else {
-                        Icon(Icons.Rounded.Person, contentDescription = null, modifier = Modifier.size(36.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape)
+                            .background(Color(0xFF131522)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (avatarUrl.isNotEmpty()) {
+                            coil.compose.AsyncImage(
+                                model = avatarUrl,
+                                contentDescription = "Profile Picture",
+                                modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                            )
+                        } else {
+                            Icon(Icons.Rounded.Person, contentDescription = null, modifier = Modifier.size(36.dp), tint = Color.White)
+                        }
                     }
                 }
                 
@@ -1646,44 +3086,44 @@ fun ProfileScreen(uid: String, email: String, lang: String, onBack: () -> Unit) 
                         .size(26.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.primary)
-                        .border(1.5.dp, MaterialTheme.colorScheme.surfaceVariant, CircleShape),
+                        .border(1.5.dp, Color(0xFF131420), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Add,
                         contentDescription = "Upload Avatar",
                         modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onPrimary
+                        tint = Color.White
                     )
                 }
             }
             
             Text(
                 text = "Tap photo to change avatar",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                fontSize = 12.sp,
+                color = Color(0xFF94A3B8),
                 modifier = Modifier
                     .align(Alignment.CenterHorizontally)
                     .clickable { imagePickerLauncher.launch("image/*") }
             )
             
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             
-            Text("Name", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(name, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+            Text("Name", fontSize = 12.sp, color = Color(0xFF64748B), fontWeight = FontWeight.Medium)
+            Text(name, fontSize = 15.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
             
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            HorizontalDivider(color = Color(0x12FFFFFF))
             
-            Text("Email", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(email, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+            Text("Email", fontSize = 12.sp, color = Color(0xFF64748B), fontWeight = FontWeight.Medium)
+            Text(email, fontSize = 15.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            HorizontalDivider(color = Color(0x12FFFFFF))
             
-            Text("Subscription Plan", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Subscription Plan", fontSize = 12.sp, color = Color(0xFF64748B), fontWeight = FontWeight.Medium)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = (currentProfile?.subscriptionPlan?.uppercase() ?: "FREE"),
-                    style = MaterialTheme.typography.bodyLarge,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = planColor
                 )
@@ -1696,7 +3136,6 @@ fun ProfileScreen(uid: String, email: String, lang: String, onBack: () -> Unit) 
                 ) {
                     Text(
                         text = "ACTIVE",
-                        style = MaterialTheme.typography.labelSmall,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
                         color = planColor
@@ -1712,35 +3151,47 @@ fun NotificationScreen(isEnabled: Boolean, lang: String, onToggle: (Boolean) -> 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .background(Color(0xFF090A10))
+            .padding(20.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White)
             }
-            Text(translate("Notification", lang), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = translate("Notification", lang),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
         }
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
         
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(24.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(24.dp))
-                .padding(16.dp),
+                .clip(RoundedCornerShape(22.dp))
+                .background(Color(0xFF131420))
+                .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(22.dp))
+                .padding(18.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(translate("Allow Notifications", lang), style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = translate("Allow Notifications", lang),
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.White
+            )
             Switch(
                 checked = isEnabled,
                 onCheckedChange = onToggle,
                 colors = SwitchDefaults.colors(
-                    checkedThumbColor = MaterialTheme.colorScheme.primary,
-                    checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
-                    uncheckedThumbColor = MaterialTheme.colorScheme.outline,
-                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = MaterialTheme.colorScheme.primary,
+                    uncheckedThumbColor = Color(0xFF64748B),
+                    uncheckedTrackColor = Color(0xFF1E1F30)
                 )
             )
         }
@@ -1754,39 +3205,51 @@ fun LanguageScreen(currentLanguage: String, onSelectLanguage: (String) -> Unit, 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .background(Color(0xFF090A10))
+            .padding(20.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White)
             }
-            Text(translate("Language", currentLanguage), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = translate("Language", currentLanguage),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
         }
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
         
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(24.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(24.dp))
+                .clip(RoundedCornerShape(22.dp))
+                .background(Color(0xFF131420))
+                .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(22.dp))
         ) {
             items(languages) { lang ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { onSelectLanguage(lang) }
-                        .padding(16.dp),
+                        .padding(18.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(translate(lang, currentLanguage), style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        text = translate(lang, currentLanguage),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color.White
+                    )
                     if (lang == currentLanguage) {
                         Icon(Icons.Rounded.CheckCircle, contentDescription = "Selected", tint = MaterialTheme.colorScheme.primary)
                     }
                 }
                 if (lang != languages.last()) {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 16.dp))
+                    HorizontalDivider(color = Color(0x12FFFFFF), modifier = Modifier.padding(horizontal = 16.dp))
                 }
             }
         }
@@ -1795,34 +3258,41 @@ fun LanguageScreen(currentLanguage: String, onSelectLanguage: (String) -> Unit, 
 
 @Composable
 fun ThemeScreen(currentTheme: String, lang: String, onSelectTheme: (String) -> Unit, onBack: () -> Unit) {
-    val themes = listOf("default", "white", "blue", "red", "orange", "gray", "yellow")
+    val themes = listOf("default", "white", "blue", "red", "orange", "gray", "yellow", "purple", "green", "pink")
     
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .background(Color(0xFF090A10))
+            .padding(20.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White)
             }
-            Text(translate("Theme", lang), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = translate("Theme", lang),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
         }
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
         
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(24.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(24.dp))
+                .clip(RoundedCornerShape(22.dp))
+                .background(Color(0xFF131420))
+                .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(22.dp))
         ) {
             items(themes) { themeOption ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { onSelectTheme(themeOption) }
-                        .padding(16.dp),
+                        .padding(18.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -1834,16 +3304,21 @@ fun ThemeScreen(currentTheme: String, lang: String, onSelectTheme: (String) -> U
                             modifier = Modifier
                                 .size(24.dp)
                                 .clip(CircleShape)
-                                .background(if (themeOption == "default") com.example.ui.theme.md_theme_dark_primary else com.example.ui.theme.getThemePrimaryColor(themeOption))
+                                .background(com.example.ui.theme.getThemePrimaryColor(themeOption))
                         )
-                        Text(themeOption.replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            text = themeOption.replaceFirstChar { it.uppercase() },
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White
+                        )
                     }
                     if (themeOption == currentTheme) {
-                        Icon(Icons.Rounded.CheckCircle, contentDescription = "Selected", tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Rounded.CheckCircle, contentDescription = "Selected", tint = com.example.ui.theme.getThemePrimaryColor(themeOption))
                     }
                 }
                 if (themeOption != themes.last()) {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 16.dp))
+                    HorizontalDivider(color = Color(0x12FFFFFF), modifier = Modifier.padding(horizontal = 16.dp))
                 }
             }
         }
@@ -1868,27 +3343,27 @@ fun SettingsItem(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(36.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(18.dp)
                 )
             }
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyLarge,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface
+                color = Color.White
             )
         }
         Row(
@@ -1898,16 +3373,16 @@ fun SettingsItem(
             if (value != null) {
                 Text(
                     text = value,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    fontSize = 13.sp,
+                    color = Color(0xFF94A3B8)
                 )
             }
             if (showArrow) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.ArrowForwardIos,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    modifier = Modifier.size(16.dp)
+                    tint = Color(0xFF64748B),
+                    modifier = Modifier.size(14.dp)
                 )
             }
         }

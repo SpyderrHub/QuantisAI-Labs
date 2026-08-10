@@ -40,7 +40,11 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         MobileAds.initialize(this)
         
-        firebaseAnalytics = Firebase.analytics
+        try {
+            firebaseAnalytics = Firebase.analytics
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "FirebaseAnalytics initialization failed", e)
+        }
         
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)

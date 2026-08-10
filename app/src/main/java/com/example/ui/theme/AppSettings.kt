@@ -13,13 +13,31 @@ val LocalAppSettingsUpdater = compositionLocalOf<(AppSettings) -> Unit> { {} }
 
 fun getThemePrimaryColor(themeName: String): Color {
     return when (themeName.lowercase()) {
-        "white" -> Color.White
-        "blue" -> Color(0xFF2196F3)
-        "red" -> Color(0xFFF44336)
-        "orange" -> Color(0xFFFF9800)
-        "gray" -> Color(0xFF9E9E9E)
-        "yellow" -> Color(0xFFFFEB3B)
-        else -> md_theme_dark_primary // Default
+        "white" -> Color(0xFFF8FAFC)
+        "blue" -> Color(0xFF3B82F6)
+        "red" -> Color(0xFFEF4444)
+        "orange" -> Color(0xFFF97316)
+        "gray" -> Color(0xFF94A3B8)
+        "yellow" -> Color(0xFFEAB308)
+        "purple" -> Color(0xFFA855F7)
+        "green" -> Color(0xFF10B981)
+        "pink" -> Color(0xFFEC4899)
+        else -> Color(0xFFA855F7) // Default
+    }
+}
+
+fun getThemeSecondaryColor(themeName: String): Color {
+    return when (themeName.lowercase()) {
+        "white" -> Color(0xFF94A3B8)
+        "blue" -> Color(0xFF06B6D4)
+        "red" -> Color(0xFFF43F5E)
+        "orange" -> Color(0xFFF59E0B)
+        "gray" -> Color(0xFF64748B)
+        "yellow" -> Color(0xFFFACC15)
+        "purple" -> Color(0xFF3B82F6)
+        "green" -> Color(0xFF059669)
+        "pink" -> Color(0xFFF43F5E)
+        else -> Color(0xFF3B82F6) // Default
     }
 }
 
@@ -30,6 +48,8 @@ fun translate(text: String, language: String): String {
         "Home" to mapOf("Spanish" to "Inicio", "French" to "Accueil", "German" to "Startseite", "Italian" to "Home", "Portuguese" to "Início", "Russian" to "Главная", "Chinese" to "首页", "Japanese" to "ホーム", "Korean" to "홈"),
         "Generate" to mapOf("Spanish" to "Generar", "French" to "Générer", "German" to "Generieren", "Italian" to "Genera", "Portuguese" to "Gerar", "Russian" to "Генерировать", "Chinese" to "生成", "Japanese" to "生成", "Korean" to "생성"),
         "Design" to mapOf("Spanish" to "Diseño", "French" to "Design", "German" to "Design", "Italian" to "Design", "Portuguese" to "Design", "Russian" to "Дизайн", "Chinese" to "设计", "Japanese" to "デザイン", "Korean" to "디자인"),
+        "Tag" to mapOf("Spanish" to "Etiqueta", "French" to "Étiquette", "German" to "Tag", "Italian" to "Tag", "Portuguese" to "Etiqueta", "Russian" to "Тег", "Chinese" to "标签", "Japanese" to "タグ", "Korean" to "태그"),
+        "Chat" to mapOf("Spanish" to "Chat", "French" to "Chat", "German" to "Chat", "Italian" to "Chat", "Portuguese" to "Chat", "Russian" to "Чат", "Chinese" to "聊天", "Japanese" to "チャット", "Korean" to "채팅"),
         "Library" to mapOf("Spanish" to "Biblioteca", "French" to "Bibliothèque", "German" to "Bibliothek", "Italian" to "Libreria", "Portuguese" to "Biblioteca", "Russian" to "Библиотека", "Chinese" to "图书馆", "Japanese" to "ライブラリ", "Korean" to "라이브러리"),
         "Settings" to mapOf("Spanish" to "Ajustes", "French" to "Paramètres", "German" to "Einstellungen", "Italian" to "Impostazioni", "Portuguese" to "Configurações", "Russian" to "Настройки", "Chinese" to "设置", "Japanese" to "設定", "Korean" to "설정"),
         "Account" to mapOf("Spanish" to "Cuenta", "French" to "Compte", "German" to "Konto", "Italian" to "Account", "Portuguese" to "Conta", "Russian" to "Аккаунт", "Chinese" to "账户", "Japanese" to "アカウント", "Korean" to "계정"),

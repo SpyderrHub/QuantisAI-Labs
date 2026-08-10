@@ -77,6 +77,20 @@ class HistoryManager(private val context: Context) {
         }
     }
 
+    suspend fun deleteHistoryItem(userId: String?, item: GenerationHistory) {
+        val current = getLocalHistory().toMutableList()
+        current.removeAll { it.id == item.id || (it.audioUrl == item.audioUrl && item.audioUrl.isNotEmpty()) }
+        saveLocalHistory(current)
+        if (!userId.isNullOrEmpty() && item.id.isNotEmpty()) {
+            withContext(Dispatchers.IO) {
+                try {
+                    firestoreRepository.deleteHistoryItem(userId, item.id)
+                } catch (e: Exception) {
+                }
+            }
+        }
+    }
+
     suspend fun fetchHistory(userId: String?): List<GenerationHistory> {
         val local = getLocalHistory()
         if (userId.isNullOrEmpty()) return local

@@ -1,6 +1,8 @@
 package com.example.ui.screens
 
 import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.animation.animateColorAsState
@@ -40,6 +42,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.api.RemoteConfigManager
 import com.example.billing.PlayBillingManager
+
+private fun Context.findActivity(): Activity? {
+    var currentContext = this
+    while (currentContext is ContextWrapper) {
+        if (currentContext is Activity) {
+            return currentContext
+        }
+        currentContext = currentContext.baseContext
+    }
+    return null
+}
 
 fun getPlanColor(planId: String?): Color {
     val id = planId?.lowercase() ?: "free"
@@ -113,7 +126,7 @@ enum class SubscriptionTier(
 fun SubscriptionScreen(authManager: com.example.auth.AuthManager, onBack: () -> Unit) {
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = Monthly, 1 = Yearly
     val context = LocalContext.current
-    val activity = context as Activity
+    val activity = remember(context) { context.findActivity() }
     val coroutineScope = rememberCoroutineScope()
 
     val user = authManager.currentUser.collectAsState(initial = authManager.currentUser.value).value
@@ -121,7 +134,9 @@ fun SubscriptionScreen(authManager: com.example.auth.AuthManager, onBack: () -> 
     var currentPlan by remember { mutableStateOf("free") }
     
     val billingManager = remember(user) {
-        PlayBillingManager(context, coroutineScope, firestoreRepository, user?.uid)
+        PlayBillingManager(context, coroutineScope, firestoreRepository, user?.uid) { newPlan ->
+            currentPlan = newPlan
+        }
     }
     
     val productDetailsList by billingManager.productDetailsList.collectAsState()
@@ -145,10 +160,12 @@ fun SubscriptionScreen(authManager: com.example.auth.AuthManager, onBack: () -> 
         val targetProductId = if (selectedTab == 0) tier.playStoreMonthlyId else tier.playStoreYearlyId
         val product = productDetailsList.find { it.productId == targetProductId }
         
-        if (product != null) {
+        if (activity != null && product != null) {
             billingManager.launchBillingFlow(activity, product)
-        } else {
+        } else if (product == null) {
             Toast.makeText(context, "Product not available for purchase yet. Please try again later.", Toast.LENGTH_LONG).show()
+        } else {
+            Toast.makeText(context, "Activity window unavailable for payment flow.", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -332,7 +349,8 @@ fun SubscriptionScreen(authManager: com.example.auth.AuthManager, onBack: () -> 
                     
                     val targetProductId = if (selectedTab == 0) tier.playStoreMonthlyId else tier.playStoreYearlyId
                     val productDetail = productDetailsList.find { it.productId == targetProductId }
-                    val formattedPrice = productDetail?.subscriptionOfferDetails?.firstOrNull()?.pricingPhases?.pricingPhaseList?.firstOrNull()?.formattedPrice
+                    val offerDetails = productDetail?.subscriptionOfferDetails?.firstOrNull { it.offerId == null } ?: productDetail?.subscriptionOfferDetails?.firstOrNull()
+                    val formattedPrice = offerDetails?.pricingPhases?.pricingPhaseList?.lastOrNull()?.formattedPrice
                     
                     val priceSuffix = if (selectedTab == 0) "/m" else "/y"
 

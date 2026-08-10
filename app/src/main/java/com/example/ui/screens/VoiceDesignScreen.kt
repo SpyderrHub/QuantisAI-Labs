@@ -479,14 +479,14 @@ fun VoiceDesignScreen(authManager: AuthManager) {
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(80.dp))
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 
     if (showPreviewPlayer && generatedAudioUrl != null) {
         val isFreeUser = userPlan == "free"
         AudioPreviewScreen(
-            audioUrl = generatedAudioUrl!!,
+            audioUrl = generatedAudioUrl ?: "",
             title = "Generated Voice",
             subtitle = if (voicePrompt.length > 30) "Voice prompt: \"${voicePrompt.take(27)}...\"" else "Voice prompt: \"$voicePrompt\"",
             imageUrl = null,

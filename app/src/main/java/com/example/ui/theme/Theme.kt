@@ -82,7 +82,8 @@ fun MyApplicationTheme(
   content: @Composable () -> Unit,
 ) {
   val appSettings = LocalAppSettings.current
-  val themePrimary = if (appSettings.theme == "default") md_theme_dark_primary else getThemePrimaryColor(appSettings.theme)
+  val themePrimary = getThemePrimaryColor(appSettings.theme)
+  val themeSecondary = getThemeSecondaryColor(appSettings.theme)
   
   var baseColorScheme =
     when {
@@ -97,8 +98,10 @@ fun MyApplicationTheme(
     
   val colorScheme = baseColorScheme.copy(
       primary = themePrimary,
+      secondary = themeSecondary,
       surfaceTint = themePrimary,
-      primaryContainer = if (appSettings.theme == "default") md_theme_dark_primaryContainer else themePrimary.copy(alpha = 0.2f)
+      primaryContainer = themePrimary.copy(alpha = 0.2f),
+      secondaryContainer = themeSecondary.copy(alpha = 0.2f)
   )
 
   MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)

@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -37,6 +38,17 @@ import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
+
+private fun Context.findActivity(): Activity? {
+    var currentContext = this
+    while (currentContext is ContextWrapper) {
+        if (currentContext is Activity) {
+            return currentContext
+        }
+        currentContext = currentContext.baseContext
+    }
+    return null
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -112,28 +124,32 @@ fun WatchAdScreen(authManager: AuthManager, onNavigateBack: () -> Unit) {
     }
 
     Scaffold(
+        containerColor = Color(0xFF090A10),
         topBar = {
-            CenterAlignedTopAppBar(
+            TopAppBar(
                 title = { 
-                    Text("Watch Ads & Earn", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium) 
+                    Text("Watch Ads & Earn", fontWeight = FontWeight.Bold, color = Color.White, style = MaterialTheme.typography.titleMedium) 
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White)
                     }
                 },
                 actions = {
                     CreditsPill(credits = userCredits)
                     Spacer(modifier = Modifier.width(16.dp))
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color(0xFF090A10)
+                )
             )
         },
         bottomBar = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.background)
-                    .padding(start = 24.dp, top = 24.dp, end = 24.dp, bottom = 50.dp),
+                    .background(Color(0xFF090A10))
+                    .padding(start = 20.dp, top = 16.dp, end = 20.dp, bottom = 40.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Button(
@@ -150,15 +166,20 @@ fun WatchAdScreen(authManager: AuthManager, onNavigateBack: () -> Unit) {
                                     rewardedAd = ad
                                     adState = "ready"
                                     
-                                    ad.show(context as Activity) { rewardItem ->
-                                        adsWatchedToday++
-                                        val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-                                        if (user != null) {
-                                            scope.launch {
-                                                firestoreRepository.updateAdsQuota(user.uid, adsWatchedToday, today)
+                                    val activity = context.findActivity()
+                                    if (activity != null) {
+                                        ad.show(activity) { rewardItem ->
+                                            adsWatchedToday++
+                                            val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+                                            if (user != null) {
+                                                scope.launch {
+                                                    firestoreRepository.updateAdsQuota(user.uid, adsWatchedToday, today)
+                                                }
                                             }
+                                            adState = "finished"
                                         }
-                                        adState = "finished"
+                                    } else {
+                                        adState = "error"
                                     }
                                 }
                             })
@@ -166,11 +187,17 @@ fun WatchAdScreen(authManager: AuthManager, onNavigateBack: () -> Unit) {
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp),
-                    shape = RoundedCornerShape(12.dp),
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(
+                            brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)
+                            )
+                        ),
+                    shape = RoundedCornerShape(20.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF6B4EE6),
-                        disabledContainerColor = Color(0xFF6B4EE6).copy(alpha = 0.5f)
+                        containerColor = Color.Transparent,
+                        disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                     ),
                     enabled = adsWatchedToday < maxAdsPerDay && adState != "loading"
                 ) {
@@ -181,7 +208,7 @@ fun WatchAdScreen(authManager: AuthManager, onNavigateBack: () -> Unit) {
                             Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = Color.White)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = if (adsWatchedToday >= maxAdsPerDay) "Limit Reached" else "Watch Ad Now", 
+                                text = if (adsWatchedToday >= maxAdsPerDay) "Limit Reached" else "Watch Ad Now (+30 Credits)", 
                                 fontSize = 16.sp, 
                                 fontWeight = FontWeight.Bold, 
                                 color = Color.White
@@ -193,13 +220,13 @@ fun WatchAdScreen(authManager: AuthManager, onNavigateBack: () -> Unit) {
                 Text(
                     text = buildAnnotatedString {
                         append("Daily Quota: ")
-                        withStyle(SpanStyle(color = Color(0xFFE6A300))) {
+                        withStyle(SpanStyle(color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold)) {
                             append("$adsWatchedToday ")
                         }
                         append("/ $maxAdsPerDay")
                     },
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    color = Color(0xFF94A3B8)
                 )
             }
         }
@@ -207,31 +234,31 @@ fun WatchAdScreen(authManager: AuthManager, onNavigateBack: () -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+                .background(Color(0xFF090A10))
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp)
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             HeroBanner()
             ProgressCard(adsWatched = adsWatchedToday, maxAds = maxAdsPerDay, creditsPerAd = creditsPerAd)
             HowItWorksSection()
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(30.dp))
         }
     }
 }
 
 @Composable
 fun CreditsPill(credits: Int) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = RoundedCornerShape(16.dp)
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color(0xFF131524))
+            .border(1.dp, Color(0x30A855F7), RoundedCornerShape(16.dp))
+            .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-        ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 Icons.Rounded.MonetizationOn, 
                 contentDescription = null, 
@@ -242,7 +269,8 @@ fun CreditsPill(credits: Int) {
             Text(
                 text = java.text.NumberFormat.getNumberInstance(Locale.US).format(credits),
                 fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.labelLarge
+                color = Color.White,
+                fontSize = 13.sp
             )
         }
     }
@@ -250,55 +278,59 @@ fun CreditsPill(credits: Int) {
 
 @Composable
 fun HeroBanner() {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF111424)
-        )
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(Color(0xFF131420))
+            .border(
+                width = 1.dp,
+                brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                    colors = listOf(Color(0x40A855F7), Color(0x203B82F6))
+                ),
+                shape = RoundedCornerShape(22.dp)
+            )
+            .padding(20.dp)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1.2f)) {
                 Text(
                     text = "Watch Ads\nEarn Credits",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color.White,
+                    lineHeight = 28.sp
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Watch short ads and earn credits to unlock premium AI features.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.7f)
+                    text = "Watch short sponsored videos to instantly add +30 credits to your balance.",
+                    fontSize = 12.sp,
+                    color = Color(0xFF94A3B8)
                 )
             }
             Spacer(modifier = Modifier.width(16.dp))
-            Box(modifier = Modifier.size(80.dp).weight(0.8f), contentAlignment = Alignment.Center) {
-                Icon(
-                    Icons.Rounded.DesktopWindows,
-                    contentDescription = null,
-                    modifier = Modifier.size(72.dp),
-                    tint = Color(0xFF6B4EE6)
-                )
+            Box(
+                modifier = Modifier
+                    .size(76.dp)
+                    .clip(CircleShape)
+                    .background(
+                        brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
+                                MaterialTheme.colorScheme.secondary.copy(alpha = 0.25f)
+                            )
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
                 Icon(
                     Icons.Rounded.PlayArrow,
                     contentDescription = null,
-                    modifier = Modifier.size(32.dp),
-                    tint = Color.White
-                )
-                Icon(
-                    Icons.Rounded.MonetizationOn,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(36.dp)
-                        .align(Alignment.BottomStart)
-                        .offset(x = (-8).dp, y = 8.dp),
-                    tint = Color(0xFFFFB300)
+                    modifier = Modifier.size(38.dp),
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
         }
@@ -307,19 +339,20 @@ fun HeroBanner() {
 
 @Composable
 fun ProgressCard(adsWatched: Int, maxAds: Int, creditsPerAd: Int) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = borderStroke()
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(Color(0xFF131420))
+            .border(
+                width = 1.dp,
+                color = Color(0x1AFFFFFF),
+                shape = RoundedCornerShape(22.dp)
+            )
+            .padding(20.dp)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
@@ -332,24 +365,19 @@ fun ProgressCard(adsWatched: Int, maxAds: Int, creditsPerAd: Int) {
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Your Progress Today",
+                        text = "Daily Progress",
                         fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleMedium
+                        color = Color.White,
+                        fontSize = 16.sp
                     )
                 }
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
                 
                 Text(
-                    text = buildAnnotatedString {
-                        withStyle(SpanStyle(color = Color(0xFFE6A300))) {
-                            append("$adsWatched ")
-                        }
-                        withStyle(SpanStyle(color = Color(0xFF6B4EE6))) {
-                            append("/ $maxAds Ads")
-                        }
-                    },
+                    text = "$adsWatched / $maxAds Ads Completed",
                     fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.bodyMedium
+                    color = Color(0xFF38BDF8),
+                    fontSize = 13.sp
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 LinearProgressIndicator(
@@ -358,36 +386,39 @@ fun ProgressCard(adsWatched: Int, maxAds: Int, creditsPerAd: Int) {
                         .fillMaxWidth()
                         .height(8.dp)
                         .clip(RoundedCornerShape(4.dp)),
-                    color = Color(0xFF6B4EE6),
-                    trackColor = Color(0xFFF3F4F6)
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "Watch up to $maxAds ads daily and earn credits.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = Color(0xFF222436)
                 )
             }
             
             Spacer(modifier = Modifier.width(16.dp))
             
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    Icons.Rounded.Toll,
-                    contentDescription = null,
-                    tint = Color(0xFFFFB300),
-                    modifier = Modifier.size(56.dp)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Rounded.MonetizationOn,
+                        contentDescription = null,
+                        tint = Color(0xFFFFB300),
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "+$creditsPerAd Credits",
+                    text = "+$creditsPerAd",
                     fontWeight = FontWeight.ExtraBold,
-                    style = MaterialTheme.typography.titleMedium
+                    color = Color.White,
+                    fontSize = 15.sp
                 )
                 Text(
                     text = "Per Ad",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    fontSize = 10.sp,
+                    color = Color(0xFF94A3B8)
                 )
             }
         }
@@ -406,7 +437,8 @@ fun HowItWorksSection() {
         Text(
             text = "How it works?",
             fontWeight = FontWeight.Bold,
-            style = MaterialTheme.typography.titleMedium
+            color = Color.White,
+            fontSize = 16.sp
         )
         Spacer(modifier = Modifier.height(16.dp))
         Row(
@@ -418,33 +450,33 @@ fun HowItWorksSection() {
                 icon = Icons.Rounded.PlayArrow,
                 stepNumber = "1",
                 title = "Watch Ad",
-                description = "Tap on watch ad button to start.",
+                description = "Tap watch ad button to begin.",
                 modifier = Modifier.weight(1f)
             )
             Icon(
                 Icons.AutoMirrored.Rounded.ArrowForward,
                 contentDescription = null,
-                tint = Color.LightGray,
-                modifier = Modifier.padding(top = 24.dp).size(16.dp)
+                tint = Color(0xFF475569),
+                modifier = Modifier.padding(top = 20.dp).size(16.dp)
             )
             HowItWorksStep(
                 icon = Icons.Rounded.AccessTime,
                 stepNumber = "2",
-                title = "Complete Ad",
-                description = "Watch full ad to earn credits.",
+                title = "Complete",
+                description = "Watch the full video ad.",
                 modifier = Modifier.weight(1f)
             )
             Icon(
                 Icons.AutoMirrored.Rounded.ArrowForward,
                 contentDescription = null,
-                tint = Color.LightGray,
-                modifier = Modifier.padding(top = 24.dp).size(16.dp)
+                tint = Color(0xFF475569),
+                modifier = Modifier.padding(top = 20.dp).size(16.dp)
             )
             HowItWorksStep(
                 icon = Icons.Rounded.MonetizationOn,
                 stepNumber = "3",
-                title = "Earn Credits",
-                description = "Credits will be added to your account.",
+                title = "Earn",
+                description = "Credits added to account.",
                 modifier = Modifier.weight(1f)
             )
         }
@@ -461,29 +493,31 @@ fun HowItWorksStep(
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier.padding(horizontal = 4.dp)
+        modifier = modifier.padding(horizontal = 2.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(56.dp)
-                .background(Color(0xFFEDE9FE), shape = CircleShape),
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF1E1F30))
+                .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            Icon(icon, contentDescription = null, tint = Color(0xFF6B4EE6), modifier = Modifier.size(28.dp))
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
         }
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
                     .size(16.dp)
-                    .background(Color(0xFFE5E7EB), shape = CircleShape),
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = stepNumber,
-                    style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
-                    color = Color.Black,
+                    color = Color.White,
                     fontSize = 10.sp
                 )
             }
@@ -491,17 +525,18 @@ fun HowItWorksStep(
             Text(
                 text = title,
                 fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.labelMedium,
+                color = Color.White,
+                fontSize = 12.sp,
                 textAlign = TextAlign.Center
             )
         }
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = description,
-            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            fontSize = 10.sp,
+            color = Color(0xFF94A3B8),
             textAlign = TextAlign.Center,
-            lineHeight = 14.sp
+            lineHeight = 13.sp
         )
     }
 }

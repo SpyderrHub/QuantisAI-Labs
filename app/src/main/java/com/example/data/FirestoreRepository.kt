@@ -197,8 +197,20 @@ class FirestoreRepository {
         }
     }
     
+    suspend fun deleteHistoryItem(userId: String, docId: String): Boolean {
+        if (db == null) return false
+        return try {
+            db.collection("users").document(userId).collection("omnivoice_generations").document(docId).delete().await()
+            db.collection("users").document(userId).collection("history").document(docId).delete().await()
+            true
+        } catch (e: Exception) {
+            android.util.Log.e("FirestoreRepository", "Error deleting history", e)
+            false
+        }
+    }
+
     suspend fun getHistory(userId: String): List<GenerationHistory> {
-        if (db == null) return emptyList()
+        if (db == null || userId.isEmpty()) return emptyList()
         val resultList = mutableListOf<GenerationHistory>()
         
         // 1. Fetch from users/{user_id}/omnivoice_generations
@@ -272,26 +284,40 @@ class FirestoreRepository {
     }
 
     suspend fun getVoices(): List<VoiceEntity> {
-        if (db == null) return emptyList()
+        val defaultVoices = listOf(
+            VoiceEntity("Intellectual Woman", "English (US)", "Female", true, "Smart & Clear", "", "https://i.pravatar.cc/150?u=IntellectualWoman", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Casual Narrator", "English (US)", "Male", true, "Casual", "", "https://i.pravatar.cc/150?u=CasualNarrator", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Steady Woman", "English (UK)", "Female", true, "Steady", "", "https://i.pravatar.cc/150?u=SteadyWoman", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Asmr Girl", "English (US)", "Female", true, "Soft & Whispering", "", "https://i.pravatar.cc/150?u=AsmrGirl", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Radiant Girl", "English (US)", "Female", true, "Bright & Warm", "", "https://i.pravatar.cc/150?u=RadiantGirl", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Trustworthy Man", "English (UK)", "Male", true, "Deep & Reliable", "", "https://i.pravatar.cc/150?u=TrustworthyMan", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Captivating Speaker", "English (US)", "Male", true, "Engaging", "", "https://i.pravatar.cc/150?u=CaptivatingSpeaker", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Whispering Girl", "English (US)", "Female", true, "Quiet & Soft", "", "https://i.pravatar.cc/150?u=WhisperingGirl", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Explanatory Man", "English (US)", "Male", true, "Informative", "", "https://i.pravatar.cc/150?u=ExplanatoryMan", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Aria", "English (US)", "Female", true, "Friendly", "", "https://i.pravatar.cc/150?u=Aria", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Roger", "English (UK)", "Male", false, "Professional", "", "https://i.pravatar.cc/150?u=Roger", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Sarah", "English (US)", "Female", false, "Warm", "", "https://i.pravatar.cc/150?u=Sarah", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Laura", "French", "Female", true, "Elegant", "", "https://i.pravatar.cc/150?u=Laura", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Mateo", "Spanish", "Male", false, "Energetic", "", "https://i.pravatar.cc/150?u=Mateo", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Yuki", "Japanese", "Female", true, "Calm", "", "https://i.pravatar.cc/150?u=Yuki", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Hans", "German", "Male", false, "Authoritative", "", "https://i.pravatar.cc/150?u=Hans", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Chloe", "English (AU)", "Female", true, "Bright", "", "https://i.pravatar.cc/150?u=Chloe", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Raj", "Hindi", "Male", false, "Clear", "", "https://i.pravatar.cc/150?u=Raj", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Sofia", "Italian", "Female", true, "Expressive", "", "https://i.pravatar.cc/150?u=Sofia", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Wei", "Chinese", "Male", false, "Neutral", "", "https://i.pravatar.cc/150?u=Wei", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Isabella", "Spanish (MX)", "Female", false, "Sweet", "", "https://i.pravatar.cc/150?u=Isabella", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Liam", "English (IE)", "Male", true, "Conversational", "", "https://i.pravatar.cc/150?u=Liam", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Emma", "English (US)", "Female", false, "Narrative", "", "https://i.pravatar.cc/150?u=Emma", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Noah", "English (CA)", "Male", true, "Deep", "", "https://i.pravatar.cc/150?u=Noah", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Mia", "English (UK)", "Female", false, "Childlike", "", "https://i.pravatar.cc/150?u=Mia", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Warm Storyteller", "English (US)", "Female", true, "Warm & Soothing", "", "https://i.pravatar.cc/150?u=WarmStoryteller", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Energetic Hero", "English (US)", "Male", true, "Bold & Vibrant", "", "https://i.pravatar.cc/150?u=EnergeticHero", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Calm Mentor", "English (UK)", "Male", true, "Wise & Patient", "", "https://i.pravatar.cc/150?u=CalmMentor", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Gentle Reader", "English (US)", "Female", false, "Soft & Rhythmic", "", "https://i.pravatar.cc/150?u=GentleReader", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
+            VoiceEntity("Bold Anchor", "English (US)", "Male", true, "Commanding", "", "https://i.pravatar.cc/150?u=BoldAnchor", "https://actions.google.com/sounds/v1/speech/test_tone.ogg")
+        )
+        if (db == null) return defaultVoices
         return try {
-            val defaultVoices = listOf(
-                VoiceEntity("Aria", "English (US)", "Female", true, "Friendly", "", "https://i.pravatar.cc/150?u=Aria", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-                VoiceEntity("Roger", "English (UK)", "Male", false, "Professional", "", "https://i.pravatar.cc/150?u=Roger", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-                VoiceEntity("Sarah", "English (US)", "Female", false, "Warm", "", "https://i.pravatar.cc/150?u=Sarah", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-                VoiceEntity("Laura", "French", "Female", true, "Elegant", "", "https://i.pravatar.cc/150?u=Laura", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-                VoiceEntity("Mateo", "Spanish", "Male", false, "Energetic", "", "https://i.pravatar.cc/150?u=Mateo", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-                VoiceEntity("Yuki", "Japanese", "Female", true, "Calm", "", "https://i.pravatar.cc/150?u=Yuki", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-                VoiceEntity("Hans", "German", "Male", false, "Authoritative", "", "https://i.pravatar.cc/150?u=Hans", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-                VoiceEntity("Chloe", "English (AU)", "Female", true, "Bright", "", "https://i.pravatar.cc/150?u=Chloe", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-                VoiceEntity("Raj", "Hindi", "Male", false, "Clear", "", "https://i.pravatar.cc/150?u=Raj", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-                VoiceEntity("Sofia", "Italian", "Female", true, "Expressive", "", "https://i.pravatar.cc/150?u=Sofia", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-                VoiceEntity("Wei", "Chinese", "Male", false, "Neutral", "", "https://i.pravatar.cc/150?u=Wei", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-                VoiceEntity("Isabella", "Spanish (MX)", "Female", false, "Sweet", "", "https://i.pravatar.cc/150?u=Isabella", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-                VoiceEntity("Liam", "English (IE)", "Male", true, "Conversational", "", "https://i.pravatar.cc/150?u=Liam", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-                VoiceEntity("Emma", "English (US)", "Female", false, "Narrative", "", "https://i.pravatar.cc/150?u=Emma", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-                VoiceEntity("Noah", "English (CA)", "Male", true, "Deep", "", "https://i.pravatar.cc/150?u=Noah", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-                VoiceEntity("Mia", "English (UK)", "Female", false, "Childlike", "", "https://i.pravatar.cc/150?u=Mia", "https://actions.google.com/sounds/v1/speech/test_tone.ogg")
-            )
             
             val snapshot = db.collection("voices").get().await()
             if (snapshot.isEmpty) {
@@ -311,7 +337,7 @@ class FirestoreRepository {
                 }
             }
         } catch (e: Exception) {
-            emptyList()
+            defaultVoices
         }
     }
 }

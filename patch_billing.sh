@@ -1,0 +1,2 @@
+sed -i 's/private val userId: String?/private val userId: String?,\n    private val onPurchaseSuccess: (String) -> Unit = {}/' app/src/main/java/com/example/billing/PlayBillingManager.kt
+sed -i 's/Toast.makeText(context, "Subscription successful! Features unlocked.", Toast.LENGTH_LONG).show()/Toast.makeText(context, "Subscription successful! Features unlocked.", Toast.LENGTH_LONG).show()\n                    onPurchaseSuccess(plan)/' app/src/main/java/com/example/billing/PlayBillingManager.kt

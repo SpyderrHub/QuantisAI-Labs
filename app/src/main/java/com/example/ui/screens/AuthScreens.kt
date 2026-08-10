@@ -1,4 +1,6 @@
 package com.example.ui.screens
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 
 import androidx.compose.animation.core.*
 
@@ -195,17 +197,90 @@ fun IntroScreen(onNavigateToLogin: () -> Unit, onNavigateToSignup: () -> Unit = 
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.Start
             ) {
-                Text(
-                    text = slides[step].title,
-                    style = MaterialTheme.typography.displaySmall,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
+                val text = androidx.compose.ui.text.buildAnnotatedString {
+                    if (step == 0) {
+                        append("Transform text ")
+                        appendInlineContent("avatar1", "[avatar1]")
+                        append(" into lifelike speech ")
+                        appendInlineContent("avatar2", "[avatar2]")
+                        append(" instantly.")
+                    } else if (step == 1) {
+                        append("Customize ")
+                        appendInlineContent("avatar3", "[avatar3]")
+                        append(" and craft the perfect voice with granular controls.")
+                    } else {
+                        append("Reach a global ")
+                        appendInlineContent("avatar4", "[avatar4]")
+                        append(" audience with hundreds of languages.")
+                    }
+                }
+                
+                val inlineContent = mapOf(
+                    "avatar1" to InlineTextContent(
+                        androidx.compose.ui.text.Placeholder(
+                            width = 48.sp,
+                            height = 48.sp,
+                            placeholderVerticalAlign = androidx.compose.ui.text.PlaceholderVerticalAlign.Center
+                        )
+                    ) {
+                        coil.compose.AsyncImage(
+                            model = com.example.R.drawable.neon_portrait_1_1785105712141,
+                            contentDescription = null,
+                            modifier = Modifier.padding(horizontal = 4.dp).fillMaxSize().clip(CircleShape).border(2.dp, Color.White, CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    },
+                    "avatar2" to InlineTextContent(
+                        androidx.compose.ui.text.Placeholder(
+                            width = 48.sp,
+                            height = 48.sp,
+                            placeholderVerticalAlign = androidx.compose.ui.text.PlaceholderVerticalAlign.Center
+                        )
+                    ) {
+                        coil.compose.AsyncImage(
+                            model = com.example.R.drawable.neon_portrait_2_1785105731665,
+                            contentDescription = null,
+                            modifier = Modifier.padding(horizontal = 4.dp).fillMaxSize().clip(CircleShape).border(2.dp, Color.White, CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    },
+                    "avatar3" to InlineTextContent(
+                        androidx.compose.ui.text.Placeholder(
+                            width = 48.sp,
+                            height = 48.sp,
+                            placeholderVerticalAlign = androidx.compose.ui.text.PlaceholderVerticalAlign.Center
+                        )
+                    ) {
+                        coil.compose.AsyncImage(
+                            model = com.example.R.drawable.neon_portrait_3_1785105747653,
+                            contentDescription = null,
+                            modifier = Modifier.padding(horizontal = 4.dp).fillMaxSize().clip(CircleShape).border(2.dp, Color.White, CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    },
+                    "avatar4" to InlineTextContent(
+                        androidx.compose.ui.text.Placeholder(
+                            width = 48.sp,
+                            height = 48.sp,
+                            placeholderVerticalAlign = androidx.compose.ui.text.PlaceholderVerticalAlign.Center
+                        )
+                    ) {
+                        coil.compose.AsyncImage(
+                            model = com.example.R.drawable.neon_portrait_4_1785105762742,
+                            contentDescription = null,
+                            modifier = Modifier.padding(horizontal = 4.dp).fillMaxSize().clip(CircleShape).border(2.dp, Color.White, CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
                 )
-                Spacer(modifier = Modifier.height(12.dp))
+
                 Text(
-                    text = slides[step].description,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color.White.copy(alpha = 0.8f)
+                    text = text,
+                    inlineContent = inlineContent,
+                    style = MaterialTheme.typography.displaySmall.copy(fontFamily = com.example.ui.theme.RubikWetPaint),
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    lineHeight = 52.sp
                 )
             }
             
@@ -312,6 +387,7 @@ fun LoginScreen(authManager: AuthManager, onNavigateToMain: () -> Unit, onNaviga
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+    var termsAccepted by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     Box(
@@ -422,7 +498,29 @@ fun LoginScreen(authManager: AuthManager, onNavigateToMain: () -> Unit, onNaviga
                     singleLine = true,
                 )
                 
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    androidx.compose.material3.Checkbox(
+                        checked = termsAccepted,
+                        onCheckedChange = { termsAccepted = it },
+                        colors = androidx.compose.material3.CheckboxDefaults.colors(
+                            checkedColor = Color(0xFFE5FF7F),
+                            uncheckedColor = Color.Gray,
+                            checkmarkColor = Color.Black
+                        )
+                    )
+                    Text(
+                        text = "I accept the Terms and Privacy Policy",
+                        color = Color.Gray,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
                 
                 if (error != null) {
                     Text(
@@ -451,7 +549,7 @@ fun LoginScreen(authManager: AuthManager, onNavigateToMain: () -> Unit, onNaviga
                     modifier = Modifier.fillMaxWidth().height(56.dp),
                     shape = RoundedCornerShape(28.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Black, contentColor = Color.White),
-                    enabled = !isLoading && email.isNotBlank() && password.isNotBlank()
+                    enabled = !isLoading && email.isNotBlank() && password.isNotBlank() && termsAccepted
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
@@ -494,6 +592,7 @@ fun SignupScreen(authManager: AuthManager, onNavigateToMain: () -> Unit, onNavig
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+    var termsAccepted by remember { mutableStateOf(false) }
     
     var isAwaitingOtp by remember { mutableStateOf(false) }
     var sentOtp by remember { mutableStateOf("") }
@@ -666,7 +765,31 @@ fun SignupScreen(authManager: AuthManager, onNavigateToMain: () -> Unit, onNavig
                     )
                 }
                 
-                Spacer(modifier = Modifier.height(32.dp))
+                if (!isAwaitingOtp) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        androidx.compose.material3.Checkbox(
+                            checked = termsAccepted,
+                            onCheckedChange = { termsAccepted = it },
+                            colors = androidx.compose.material3.CheckboxDefaults.colors(
+                                checkedColor = Color(0xFFE5FF7F),
+                                uncheckedColor = Color.Gray,
+                                checkmarkColor = Color.Black
+                            )
+                        )
+                        Text(
+                            text = "I accept the Terms and Privacy Policy",
+                            color = Color.Gray,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                } else {
+                    Spacer(modifier = Modifier.height(32.dp))
+                }
                 
                 if (error != null) {
                     Text(
@@ -726,7 +849,7 @@ fun SignupScreen(authManager: AuthManager, onNavigateToMain: () -> Unit, onNavig
                     modifier = Modifier.fillMaxWidth().height(56.dp),
                     shape = RoundedCornerShape(28.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Black, contentColor = Color.White),
-                    enabled = !isLoading && (if (!isAwaitingOtp) email.isNotBlank() && password.isNotBlank() else enteredOtp.length == 6)
+                    enabled = !isLoading && (if (!isAwaitingOtp) email.isNotBlank() && password.isNotBlank() && termsAccepted else enteredOtp.length == 6)
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))

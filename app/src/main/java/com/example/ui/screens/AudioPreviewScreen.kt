@@ -273,7 +273,7 @@ fun AudioPreviewScreen(
             ) {
                 if (isFreeUser) {
                     BannerAd(
-                        adUnitId = "ca-app-pub-7467637204633571~8902513793",
+                        adUnitId = "ca-app-pub-3940256099942544/6300978111",
                         adSize = AdSize.MEDIUM_RECTANGLE,
                         modifier = Modifier
                             .size(300.dp, 250.dp)
@@ -594,26 +594,30 @@ fun AudioPreviewScreen(
     }
 }
 
+private fun formatTime(ms: Int): String {
+    val totalSecs = ms / 1000
+    val mins = totalSecs / 60
+    val secs = totalSecs % 60
+    return String.format(Locale.US, "%02d:%02d", mins, secs)
+}
+
 @Composable
 fun BannerAd(adUnitId: String, adSize: AdSize = AdSize.BANNER, modifier: Modifier = Modifier) {
-    val cleanAdUnitId = if (adUnitId.contains("~")) adUnitId.replace("~", "/") else adUnitId
+    val cleanAdUnitId = if (adUnitId.contains("~") || adUnitId.isEmpty()) "ca-app-pub-3940256099942544/6300978111" else adUnitId
     AndroidView(
         modifier = modifier,
         factory = { context ->
             AdView(context).apply {
                 setAdSize(adSize)
                 this.adUnitId = cleanAdUnitId
-                loadAd(AdRequest.Builder().build())
+                try {
+                    loadAd(AdRequest.Builder().build())
+                } catch (e: Exception) {
+                    android.util.Log.e("BannerAd", "Failed to load banner ad", e)
+                }
             }
         }
     )
-}
-
-private fun formatTime(ms: Int): String {
-    val totalSecs = ms / 1000
-    val mins = totalSecs / 60
-    val secs = totalSecs % 60
-    return String.format(Locale.US, "%02d:%02d", mins, secs)
 }
 
 @Composable

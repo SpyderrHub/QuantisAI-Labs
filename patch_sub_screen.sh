@@ -1,0 +1,1 @@
+sed -i 's/PlayBillingManager(context, coroutineScope, firestoreRepository, user?.uid)/PlayBillingManager(context, coroutineScope, firestoreRepository, user?.uid) { newPlan ->\n            currentPlan = newPlan\n        }/' app/src/main/java/com/example/ui/screens/SubscriptionScreen.kt

@@ -1,23 +1,23 @@
                 val text = androidx.compose.ui.text.buildAnnotatedString {
                     if (step == 0) {
                         append("Transform text ")
-                        androidx.compose.foundation.text.appendInlineContent("avatar1", "[avatar1]")
+                        appendInlineContent("avatar1", "[avatar1]")
                         append(" into lifelike speech ")
-                        androidx.compose.foundation.text.appendInlineContent("avatar2", "[avatar2]")
+                        appendInlineContent("avatar2", "[avatar2]")
                         append(" instantly.")
                     } else if (step == 1) {
                         append("Customize ")
-                        androidx.compose.foundation.text.appendInlineContent("avatar3", "[avatar3]")
+                        appendInlineContent("avatar3", "[avatar3]")
                         append(" and craft the perfect voice with granular controls.")
                     } else {
                         append("Reach a global ")
-                        androidx.compose.foundation.text.appendInlineContent("avatar4", "[avatar4]")
+                        appendInlineContent("avatar4", "[avatar4]")
                         append(" audience with hundreds of languages.")
                     }
                 }
                 
                 val inlineContent = mapOf(
-                    "avatar1" to androidx.compose.foundation.text.InlineTextContent(
+                    "avatar1" to InlineTextContent(
                         androidx.compose.ui.text.Placeholder(
                             width = 48.sp,
                             height = 48.sp,
@@ -31,7 +31,7 @@
                             contentScale = ContentScale.Crop
                         )
                     },
-                    "avatar2" to androidx.compose.foundation.text.InlineTextContent(
+                    "avatar2" to InlineTextContent(
                         androidx.compose.ui.text.Placeholder(
                             width = 48.sp,
                             height = 48.sp,
@@ -45,7 +45,7 @@
                             contentScale = ContentScale.Crop
                         )
                     },
-                    "avatar3" to androidx.compose.foundation.text.InlineTextContent(
+                    "avatar3" to InlineTextContent(
                         androidx.compose.ui.text.Placeholder(
                             width = 48.sp,
                             height = 48.sp,
@@ -59,7 +59,7 @@
                             contentScale = ContentScale.Crop
                         )
                     },
-                    "avatar4" to androidx.compose.foundation.text.InlineTextContent(
+                    "avatar4" to InlineTextContent(
                         androidx.compose.ui.text.Placeholder(
                             width = 48.sp,
                             height = 48.sp,
@@ -83,3 +83,4 @@
                     color = Color.White,
                     lineHeight = 52.sp
                 )
+            }

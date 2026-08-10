@@ -20,7 +20,7 @@ object RemoteConfigManager {
         
         try {
             val configSettings = remoteConfigSettings {
-                minimumFetchIntervalInSeconds = 604800 // 7 days
+                minimumFetchIntervalInSeconds = if (force) 0 else 604800 // 0s if forced, else 7 days
             }
             remoteConfig.setConfigSettingsAsync(configSettings).await()
             
@@ -28,7 +28,12 @@ object RemoteConfigManager {
             // remoteConfig.setDefaultsAsync(mapOf("API_KEY" to "default_key")).await()
 
             // Fetch and activate the config
-            remoteConfig.fetchAndActivate().await()
+            val updated = remoteConfig.fetchAndActivate().await()
+            if (updated) {
+                Log.d("RemoteConfigManager", "Remote config updated and cached")
+            } else {
+                Log.d("RemoteConfigManager", "Remote config already up to date, leaving as is")
+            }
             isInitialized = true
         } catch (e: Exception) {
             Log.e("RemoteConfigManager", "Failed to initialize Firebase Remote Config", e)
@@ -36,34 +41,34 @@ object RemoteConfigManager {
     }
 
     fun getApiKey(keyName: String): String {
-        return remoteConfig.getString(keyName)
+        return try { remoteConfig.getString(keyName) } catch (e: Exception) { "" }
     }
 
     fun getWebClientId(): String {
-        return remoteConfig.getString("WEB_CLIENT_ID")
+        return try { remoteConfig.getString("WEB_CLIENT_ID") } catch (e: Exception) { "" }
     }
 
     fun getGeminiApiKey(): String {
-        return remoteConfig.getString("GEMINI_API_KEY")
+        return try { remoteConfig.getString("GEMINI_API_KEY") } catch (e: Exception) { "" }
     }
 
     fun getTtsApiUrl(): String {
-        return remoteConfig.getString("TTS_API_URL")
+        return try { remoteConfig.getString("TTS_API_URL") } catch (e: Exception) { "" }
     }
 
     fun getVoiceDesignerApiUrl(): String {
-        return remoteConfig.getString("VOICE_DESIGNER_API_URL")
+        return try { remoteConfig.getString("VOICE_DESIGNER_API_URL") } catch (e: Exception) { "" }
     }
 
     fun getSttApiUrl(): String {
-        return remoteConfig.getString("STT_API_URL")
+        return try { remoteConfig.getString("STT_API_URL") } catch (e: Exception) { "" }
     }
 
     fun getPlanPrice(keyName: String): String {
-        return remoteConfig.getString(keyName)
+        return try { remoteConfig.getString(keyName) } catch (e: Exception) { "" }
     }
 
     fun getRazorpayKeyId(): String {
-        return remoteConfig.getString("RAZORPAY_KEY_ID")
+        return try { remoteConfig.getString("RAZORPAY_KEY_ID") } catch (e: Exception) { "" }
     }
 }

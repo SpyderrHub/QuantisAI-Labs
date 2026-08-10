@@ -1,3 +1,5 @@
+#!/bin/bash
+cat << 'REPLACE' > replacement.txt
                 val text = androidx.compose.ui.text.buildAnnotatedString {
                     if (step == 0) {
                         append("Transform text ")
@@ -83,3 +85,18 @@
                     color = Color.White,
                     lineHeight = 52.sp
                 )
+REPLACE
+
+awk '
+NR==198 {
+    while ((getline line < "replacement.txt") > 0) {
+        print line
+    }
+    skip = 1
+}
+NR==210 {
+    skip = 0
+    next
+}
+!skip { print }
+' app/src/main/java/com/example/ui/screens/AuthScreens.kt > temp.kt && mv temp.kt app/src/main/java/com/example/ui/screens/AuthScreens.kt

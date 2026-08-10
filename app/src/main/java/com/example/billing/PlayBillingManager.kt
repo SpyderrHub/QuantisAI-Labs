@@ -17,7 +17,8 @@ class PlayBillingManager(
     private val context: Context,
     private val coroutineScope: CoroutineScope,
     private val firestoreRepository: FirestoreRepository,
-    private val userId: String?
+    private val userId: String?,
+    private val onPurchaseSuccess: (String) -> Unit = {}
 ) {
     private val _productDetailsList = MutableStateFlow<List<ProductDetails>>(emptyList())
     val productDetailsList: StateFlow<List<ProductDetails>> = _productDetailsList
@@ -89,7 +90,8 @@ class PlayBillingManager(
     }
 
     fun launchBillingFlow(activity: Activity, productDetails: ProductDetails) {
-        val offerToken = productDetails.subscriptionOfferDetails?.firstOrNull()?.offerToken ?: return
+        val offerDetails = productDetails.subscriptionOfferDetails?.firstOrNull { it.offerId == null } ?: productDetails.subscriptionOfferDetails?.firstOrNull()
+        val offerToken = offerDetails?.offerToken ?: return
         
         val productDetailsParamsList = listOf(
             BillingFlowParams.ProductDetailsParams.newBuilder()
@@ -148,6 +150,7 @@ class PlayBillingManager(
             withContext(Dispatchers.Main) {
                 if (success) {
                     Toast.makeText(context, "Subscription successful! Features unlocked.", Toast.LENGTH_LONG).show()
+                    onPurchaseSuccess(plan)
                 } else {
                     Toast.makeText(context, "Subscription recorded but failed to update profile.", Toast.LENGTH_LONG).show()
                 }
