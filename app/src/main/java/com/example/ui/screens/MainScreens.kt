@@ -1,4 +1,7 @@
 package com.example.ui.screens
+
+import androidx.compose.ui.zIndex
+import com.example.ui.components.shimmerEffect
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -51,6 +54,7 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayCircle
@@ -281,34 +285,60 @@ private fun NavItemComponent(
 @Composable
 fun MainScreen(authManager: AuthManager, onLogout: () -> Unit, onNavigateToWatchAd: () -> Unit) {
     var currentTab by remember { mutableIntStateOf(0) }
+    var showSubscriptionModal by remember { mutableStateOf(false) }
     val appSettings = LocalAppSettings.current
     val lang = appSettings.language
     
     Scaffold(
-        containerColor = Color(0xFF090A10)
+        containerColor = Color(0xFF090A10),
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0)
     ) { paddingValues ->
         Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
-            // Main Content Area with bottom padding for the floating navbar
-            Box(modifier = Modifier.fillMaxSize().padding(bottom = if (currentTab == 1) 0.dp else 65.dp)) {
+            // Main Content Area with bottom padding for the navbar
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .padding(bottom = if (currentTab == 1 || currentTab == 2) 0.dp else 64.dp)
+            ) {
                 when (currentTab) {
                     0 -> HomeScreen(authManager, onNavigateToWatchAd)
                     1 -> GenerateScreen(authManager, { currentTab = 0 })
-                    2 -> VoiceDesignScreen(authManager)
+                    2 -> VoiceDesignScreen(
+                        authManager = authManager,
+                        onBack = { currentTab = 0 },
+                        onNavigateToTts = { currentTab = 1 },
+                        onNavigateToSubscription = { showSubscriptionModal = true }
+                    )
                     3 -> LibraryScreen(authManager)
                     4 -> AccountScreen(authManager, onLogout)
                 }
             }
             
+            if (showSubscriptionModal) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(100f)
+                ) {
+                    SubscriptionScreen(
+                        authManager = authManager,
+                        onBack = { showSubscriptionModal = false }
+                    )
+                }
+            }
+            
             // Custom Curved Bottom Navigation Bar
-            if (currentTab != 1) {
+            if (currentTab != 1 && currentTab != 2) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .navigationBarsPadding()
-                        .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 0.dp)
+                        .padding(start = 12.dp, end = 12.dp, top = 0.dp, bottom = 4.dp)
                         .fillMaxWidth()
                 ) {
-                val navShape = remember { CurvedCutoutNavShape(cornerRadius = 28.dp, domeRadius = 34.dp, domeHeight = 22.dp) }
+                val navShape = remember { CurvedCutoutNavShape(cornerRadius = 24.dp, domeRadius = 32.dp, domeHeight = 20.dp) }
                 
                 Box(
                     modifier = Modifier
@@ -319,7 +349,7 @@ fun MainScreen(authManager: AuthManager, onLogout: () -> Unit, onNavigateToWatch
                         }
                         .background(Color(0xFF13141F))
                         .border(width = 1.dp, color = Color(0x25FFFFFF), shape = navShape)
-                        .padding(top = 8.dp, bottom = 12.dp)
+                        .padding(top = 6.dp, bottom = 6.dp)
                 ) {
                     Row(
                         modifier = Modifier
@@ -374,8 +404,8 @@ fun MainScreen(authManager: AuthManager, onLogout: () -> Unit, onNavigateToWatch
                         .background(
                             brush = androidx.compose.ui.graphics.Brush.linearGradient(
                                 colors = listOf(
-                                    Color(0xFF9D61FF),
-                                    Color(0xFF7C3AED)
+                                    MaterialTheme.colorScheme.primary,
+                                    MaterialTheme.colorScheme.secondary
                                 )
                             )
                         )
@@ -386,7 +416,7 @@ fun MainScreen(authManager: AuthManager, onLogout: () -> Unit, onNavigateToWatch
                     Icon(
                         imageVector = Icons.Rounded.Mic,
                         contentDescription = translate("Generate", lang),
-                        tint = Color.White,
+                        tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(28.dp)
                     )
                 }
@@ -413,7 +443,7 @@ fun HomeScreen(authManager: AuthManager, onNavigateToWatchAd: () -> Unit) {
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
-        recentGenerations = historyManager.getLocalHistory()
+        recentGenerations = historyManager.getLocalHistory(user?.uid)
     }
 
     LaunchedEffect(user) {
@@ -426,11 +456,9 @@ fun HomeScreen(authManager: AuthManager, onNavigateToWatchAd: () -> Unit) {
             isLoading = false
             
             val history = historyManager.fetchHistory(user.uid)
-            if (history.isNotEmpty()) {
-                recentGenerations = history
-            }
+            recentGenerations = history
         } else {
-            recentGenerations = historyManager.getLocalHistory()
+            recentGenerations = historyManager.getLocalHistory(null)
             isLoading = false
         }
     }
@@ -643,7 +671,7 @@ fun HomeScreen(authManager: AuthManager, onNavigateToWatchAd: () -> Unit) {
                                 Icon(
                                     imageVector = Icons.Rounded.PlayArrow,
                                     contentDescription = null,
-                                    tint = Color.White,
+                                    tint = MaterialTheme.colorScheme.onPrimary,
                                     modifier = Modifier.size(22.dp)
                                 )
                             }
@@ -729,7 +757,7 @@ fun HomeScreen(authManager: AuthManager, onNavigateToWatchAd: () -> Unit) {
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.clickable { }
                     ) {
-                        val countText = if (recentGenerations.isNotEmpty()) "${recentGenerations.size} audio(s)" else "9 audio(s)"
+                        val countText = "${recentGenerations.size} audio(s)"
                         Text(
                             text = countText,
                             fontSize = 13.sp,
@@ -746,23 +774,67 @@ fun HomeScreen(authManager: AuthManager, onNavigateToWatchAd: () -> Unit) {
                     }
                 }
                 
-                val displayList = if (recentGenerations.isNotEmpty()) {
-                    recentGenerations
+                if (isLoading) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        repeat(3) {
+                            com.example.ui.components.VoiceCardSkeleton()
+                        }
+                    }
+                } else if (recentGenerations.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(Color(0xFF12131F))
+                            .border(
+                                width = 1.dp,
+                                color = Color(0x1AFFFFFF),
+                                shape = RoundedCornerShape(20.dp)
+                            )
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0x222E3254)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.GraphicEq,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            Text(
+                                text = "No Audio Generations Yet",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Text(
+                                text = "Your generated speech and audio recordings will appear here privately.",
+                                fontSize = 12.sp,
+                                color = Color(0xFF94A3B8),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
+                    }
                 } else {
-                    listOf(
-                        com.example.data.GenerationHistory(id = "1", text = "Audio generation", voiceName = "Generated Audio", date = System.currentTimeMillis() - 7200000, audioUrl = ""),
-                        com.example.data.GenerationHistory(id = "2", text = "Audio generation", voiceName = "Generated Audio", date = System.currentTimeMillis() - 7200000, audioUrl = ""),
-                        com.example.data.GenerationHistory(id = "3", text = "Audio generation", voiceName = "Generated Audio", date = System.currentTimeMillis() - 7200000, audioUrl = ""),
-                        com.example.data.GenerationHistory(id = "4", text = "Audio generation", voiceName = "Generated Audio", date = System.currentTimeMillis() - 7200000, audioUrl = ""),
-                        com.example.data.GenerationHistory(id = "5", text = "Audio generation", voiceName = "Generated Audio", date = System.currentTimeMillis() - 7200000, audioUrl = "")
-                    )
-                }
-
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    displayList.forEach { historyItem ->
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        recentGenerations.forEach { historyItem ->
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -844,7 +916,7 @@ fun HomeScreen(authManager: AuthManager, onNavigateToWatchAd: () -> Unit) {
                                         .clickable {
                                             scope.launch {
                                                 historyManager.deleteHistoryItem(user?.uid, historyItem)
-                                                recentGenerations = historyManager.getLocalHistory()
+                                                recentGenerations = historyManager.getLocalHistory(user?.uid)
                                             }
                                         },
                                     contentAlignment = Alignment.Center
@@ -909,6 +981,7 @@ fun HomeScreen(authManager: AuthManager, onNavigateToWatchAd: () -> Unit) {
                 }
             }
         }
+    }
     }
 }
 
@@ -1090,6 +1163,7 @@ fun GenerateScreen(authManager: AuthManager, onNavigateToHome: () -> Unit) {
 
     var generatedAudioUrl by remember { mutableStateOf<String?>(null) }
     var showPreviewPlayer by remember { mutableStateOf(false) }
+    var showDisclaimerDialog by remember { mutableStateOf(false) }
     
     var activePlayingAudioUrl by remember { mutableStateOf<String?>(null) }
     var isAudioPlaying by remember { mutableStateOf(false) }
@@ -1341,20 +1415,28 @@ fun GenerateScreen(authManager: AuthManager, onNavigateToHome: () -> Unit) {
                                             .padding(14.dp)
                                     ) {
                                         if (msg.isLoading) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                            ) {
-                                                CircularProgressIndicator(
-                                                    modifier = Modifier.size(18.dp),
-                                                    color = MaterialTheme.colorScheme.primary,
-                                                    strokeWidth = 2.dp
-                                                )
-                                                Text(
-                                                    text = msg.text,
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    fontSize = 13.sp
+                                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                                ) {
+                                                    CircularProgressIndicator(
+                                                        modifier = Modifier.size(16.dp),
+                                                        color = MaterialTheme.colorScheme.primary,
+                                                        strokeWidth = 2.dp
+                                                    )
+                                                    Text(
+                                                        text = msg.text,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        fontSize = 13.sp
+                                                    )
+                                                }
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .height(16.dp)
+                                                        .shimmerEffect()
                                                 )
                                             }
                                         } else {
@@ -1617,6 +1699,7 @@ fun GenerateScreen(authManager: AuthManager, onNavigateToHome: () -> Unit) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(MaterialTheme.colorScheme.background)
+                        .navigationBarsPadding()
                         .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp)
                 ) {
                     // Speaker Selector Pills (Title "Speaker" removed!)
@@ -1810,7 +1893,22 @@ fun GenerateScreen(authManager: AuthManager, onNavigateToHome: () -> Unit) {
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
+                    
+                    // Disclaimer Notice
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "AI-generated audio may contain mistakes. Please review before use.",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
                 }
             } else {
                 // Speech to Text View - Chatting Interface
@@ -1971,6 +2069,7 @@ fun GenerateScreen(authManager: AuthManager, onNavigateToHome: () -> Unit) {
 
                                         }
 
+                                    }
                                         // Action Icons Row under AI Message (Matches TTS UI)
                                         if (!msg.isLoading) {
                                             Row(
@@ -2054,17 +2153,18 @@ fun GenerateScreen(authManager: AuthManager, onNavigateToHome: () -> Unit) {
                                                 }
                                             }
                                         }
-                                    }
                                 }
                             }
                         }
                     }
+                }
 
-                    // Bottom STT Input Area
-                    Column(
+                // Bottom STT Input Area
+                Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(MaterialTheme.colorScheme.background)
+                            .navigationBarsPadding()
                             .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp)
                     ) {
                         // Input Pill Row (Matches TTS styling exactly)
@@ -2242,7 +2342,53 @@ fun GenerateScreen(authManager: AuthManager, onNavigateToHome: () -> Unit) {
             onBack = { showPreviewPlayer = false }
         )
     }
-}
+
+    // Disclaimer Info Modal Dialog
+    if (showDisclaimerDialog) {
+        AlertDialog(
+            onDismissRequest = { showDisclaimerDialog = false },
+            shape = RoundedCornerShape(20.dp),
+            icon = {
+                Icon(
+                    imageVector = Icons.Rounded.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "AI Audio Disclaimer & Guidelines",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "• AI-generated speech is produced automatically using neural speech models.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        text = "• Pronunciations, pitch, or emotional tone may occasionally contain minor inaccuracies.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        text = "• Please review and listen to all synthesized audio before publishing or using in production.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        text = "• Credits/quota are deducted based on character length during audio generation.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showDisclaimerDialog = false }) {
+                    Text("Understood", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -2367,7 +2513,7 @@ fun LibraryScreen(authManager: AuthManager) {
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = androidx.compose.ui.graphics.Color(0xFF131527),
                         unfocusedContainerColor = androidx.compose.ui.graphics.Color(0xFF131527),
-                        focusedBorderColor = androidx.compose.ui.graphics.Color(0xFF8B5CF6),
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
                         unfocusedBorderColor = androidx.compose.ui.graphics.Color(0xFF262943),
                         focusedTextColor = androidx.compose.ui.graphics.Color.White,
                         unfocusedTextColor = androidx.compose.ui.graphics.Color.White
@@ -2398,12 +2544,12 @@ fun LibraryScreen(authManager: AuthManager) {
                     modifier = Modifier
                         .clip(RoundedCornerShape(50))
                         .background(
-                            if (isSelected) androidx.compose.ui.graphics.Color(0xFF2E1065)
+                            if (isSelected) MaterialTheme.colorScheme.primary
                             else androidx.compose.ui.graphics.Color(0xFF131527)
                         )
                         .border(
                             width = if (isSelected) 1.5.dp else 1.dp,
-                            color = if (isSelected) androidx.compose.ui.graphics.Color(0xFF9333EA)
+                            color = if (isSelected) MaterialTheme.colorScheme.primary
                             else androidx.compose.ui.graphics.Color(0xFF262943),
                             shape = RoundedCornerShape(50)
                         )
@@ -2416,7 +2562,7 @@ fun LibraryScreen(authManager: AuthManager) {
                 ) {
                     Text(
                         text = category,
-                        color = if (isSelected) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color(0xFF94A3B8),
+                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary else androidx.compose.ui.graphics.Color(0xFF94A3B8),
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                         fontSize = 13.sp
                     )
@@ -2429,7 +2575,7 @@ fun LibraryScreen(authManager: AuthManager) {
         if (isSyncing && allVoices.isNotEmpty()) {
             androidx.compose.material3.LinearProgressIndicator(
                 modifier = Modifier.fillMaxWidth(),
-                color = androidx.compose.ui.graphics.Color(0xFF8B5CF6)
+                color = MaterialTheme.colorScheme.primary
             )
         }
 
@@ -2438,10 +2584,9 @@ fun LibraryScreen(authManager: AuthManager) {
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth(),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
             ) {
-                CircularProgressIndicator(color = androidx.compose.ui.graphics.Color(0xFF8B5CF6))
+                com.example.ui.components.VoiceGridSkeleton(count = 9)
             }
         } else if (filteredVoices.isEmpty()) {
             Box(
@@ -2510,12 +2655,12 @@ fun LibraryScreen(authManager: AuthManager) {
                 Icon(
                     Icons.Rounded.ChevronLeft,
                     contentDescription = "Previous",
-                    tint = if (currentPage > 0) androidx.compose.ui.graphics.Color(0xFF3B82F6) else androidx.compose.ui.graphics.Color(0xFF475569)
+                    tint = if (currentPage > 0) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color(0xFF475569)
                 )
                 Spacer(modifier = Modifier.width(2.dp))
                 Text(
                     text = "Previous",
-                    color = if (currentPage > 0) androidx.compose.ui.graphics.Color(0xFF3B82F6) else androidx.compose.ui.graphics.Color(0xFF475569),
+                    color = if (currentPage > 0) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color(0xFF475569),
                     fontWeight = FontWeight.Medium,
                     fontSize = 13.sp
                 )
@@ -2539,7 +2684,7 @@ fun LibraryScreen(authManager: AuthManager) {
             ) {
                 Text(
                     text = "Next",
-                    color = if (currentPage < totalPages - 1) androidx.compose.ui.graphics.Color(0xFF3B82F6) else androidx.compose.ui.graphics.Color(0xFF475569),
+                    color = if (currentPage < totalPages - 1) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color(0xFF475569),
                     fontWeight = FontWeight.Medium,
                     fontSize = 13.sp
                 )
@@ -2547,7 +2692,7 @@ fun LibraryScreen(authManager: AuthManager) {
                 Icon(
                     Icons.Rounded.ChevronRight,
                     contentDescription = "Next",
-                    tint = if (currentPage < totalPages - 1) androidx.compose.ui.graphics.Color(0xFF3B82F6) else androidx.compose.ui.graphics.Color(0xFF475569)
+                    tint = if (currentPage < totalPages - 1) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color(0xFF475569)
                 )
             }
         }
@@ -2843,8 +2988,6 @@ fun AccountScreen(authManager: AuthManager, onLogout: () -> Unit) {
                         .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(22.dp))
                 ) {
                     SettingsItem(icon = Icons.Rounded.Palette, title = translate("Theme", lang), value = appSettings.theme.replaceFirstChar { it.uppercase() }, onClick = { currentSettingsScreen = "theme" })
-                    HorizontalDivider(color = Color(0x12FFFFFF), modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingsItem(icon = Icons.Rounded.Language, title = translate("Language", lang), value = translate(lang, lang), onClick = { currentSettingsScreen = "language" })
                 }
                 
                 Spacer(modifier = Modifier.height(20.dp))
@@ -2924,16 +3067,6 @@ fun AccountScreen(authManager: AuthManager, onLogout: () -> Unit) {
                 isEnabled = notificationsEnabled,
                 lang = lang,
                 onToggle = { notificationsEnabled = it },
-                onBack = { currentSettingsScreen = "main" }
-            )
-        }
-        "language" -> {
-            LanguageScreen(
-                currentLanguage = lang,
-                onSelectLanguage = { 
-                    updateSettings(appSettings.copy(language = it))
-                    currentSettingsScreen = "main" 
-                },
                 onBack = { currentSettingsScreen = "main" }
             )
         }
@@ -3199,66 +3332,8 @@ fun NotificationScreen(isEnabled: Boolean, lang: String, onToggle: (Boolean) -> 
 }
 
 @Composable
-fun LanguageScreen(currentLanguage: String, onSelectLanguage: (String) -> Unit, onBack: () -> Unit) {
-    val languages = listOf("English", "Spanish", "French", "German", "Italian", "Portuguese", "Russian", "Chinese", "Japanese", "Korean")
-    
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFF090A10))
-            .padding(20.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White)
-            }
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = translate("Language", currentLanguage),
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-        }
-        Spacer(modifier = Modifier.height(20.dp))
-        
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(22.dp))
-                .background(Color(0xFF131420))
-                .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(22.dp))
-        ) {
-            items(languages) { lang ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSelectLanguage(lang) }
-                        .padding(18.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = translate(lang, currentLanguage),
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color.White
-                    )
-                    if (lang == currentLanguage) {
-                        Icon(Icons.Rounded.CheckCircle, contentDescription = "Selected", tint = MaterialTheme.colorScheme.primary)
-                    }
-                }
-                if (lang != languages.last()) {
-                    HorizontalDivider(color = Color(0x12FFFFFF), modifier = Modifier.padding(horizontal = 16.dp))
-                }
-            }
-        }
-    }
-}
-
-@Composable
 fun ThemeScreen(currentTheme: String, lang: String, onSelectTheme: (String) -> Unit, onBack: () -> Unit) {
-    val themes = listOf("default", "white", "blue", "red", "orange", "gray", "yellow", "purple", "green", "pink")
+    val themes = listOf("white", "purple", "blue", "red", "orange", "gray", "yellow", "green", "pink", "default")
     
     Column(
         modifier = Modifier
@@ -3314,7 +3389,22 @@ fun ThemeScreen(currentTheme: String, lang: String, onSelectTheme: (String) -> U
                         )
                     }
                     if (themeOption == currentTheme) {
-                        Icon(Icons.Rounded.CheckCircle, contentDescription = "Selected", tint = com.example.ui.theme.getThemePrimaryColor(themeOption))
+                        val themeColor = com.example.ui.theme.getThemePrimaryColor(themeOption)
+                        val iconTint = com.example.ui.theme.getOnPrimaryColor(themeOption)
+                        Box(
+                            modifier = Modifier
+                                .size(26.dp)
+                                .clip(CircleShape)
+                                .background(themeColor),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Check,
+                                contentDescription = "Selected",
+                                tint = iconTint,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
                 }
                 if (themeOption != themes.last()) {

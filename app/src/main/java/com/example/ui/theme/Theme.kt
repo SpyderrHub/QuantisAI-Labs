@@ -84,6 +84,7 @@ fun MyApplicationTheme(
   val appSettings = LocalAppSettings.current
   val themePrimary = getThemePrimaryColor(appSettings.theme)
   val themeSecondary = getThemeSecondaryColor(appSettings.theme)
+  val themeOnPrimary = getOnPrimaryColor(appSettings.theme)
   
   var baseColorScheme =
     when {
@@ -98,9 +99,11 @@ fun MyApplicationTheme(
     
   val colorScheme = baseColorScheme.copy(
       primary = themePrimary,
+      onPrimary = themeOnPrimary,
       secondary = themeSecondary,
       surfaceTint = themePrimary,
-      primaryContainer = themePrimary.copy(alpha = 0.2f),
+      primaryContainer = if (appSettings.theme.lowercase() == "white") Color(0xFFE2E8F0) else themePrimary.copy(alpha = 0.2f),
+      onPrimaryContainer = if (appSettings.theme.lowercase() == "white") Color(0xFF000000) else Color(0xFFFFFFFF),
       secondaryContainer = themeSecondary.copy(alpha = 0.2f)
   )
 

@@ -10,8 +10,13 @@ class HistoryManager(private val context: Context) {
     private val prefs = context.getSharedPreferences("generation_history_prefs", Context.MODE_PRIVATE)
     private val firestoreRepository = FirestoreRepository()
 
-    fun getLocalHistory(): List<GenerationHistory> {
-        val json = prefs.getString("history_list", null) ?: return emptyList()
+    private fun getPrefKey(userId: String?): String {
+        return if (!userId.isNullOrEmpty()) "history_list_$userId" else "history_list_guest"
+    }
+
+    fun getLocalHistory(userId: String? = null): List<GenerationHistory> {
+        val key = getPrefKey(userId)
+        val json = prefs.getString(key, null) ?: return emptyList()
         val list = mutableListOf<GenerationHistory>()
         return try {
             val array = JSONArray(json)
@@ -37,8 +42,9 @@ class HistoryManager(private val context: Context) {
         }
     }
 
-    private fun saveLocalHistory(list: List<GenerationHistory>) {
+    private fun saveLocalHistory(userId: String?, list: List<GenerationHistory>) {
         try {
+            val key = getPrefKey(userId)
             val array = JSONArray()
             for (item in list) {
                 val obj = JSONObject().apply {
@@ -54,17 +60,17 @@ class HistoryManager(private val context: Context) {
                 }
                 array.put(obj)
             }
-            prefs.edit().putString("history_list", array.toString()).apply()
+            prefs.edit().putString(key, array.toString()).apply()
         } catch (e: Exception) {
             // ignore
         }
     }
 
     suspend fun saveHistoryItem(userId: String?, history: GenerationHistory) {
-        val current = getLocalHistory().toMutableList()
+        val current = getLocalHistory(userId).toMutableList()
         current.removeAll { it.id == history.id || (it.audioUrl == history.audioUrl && history.audioUrl.isNotEmpty()) }
         current.add(0, history)
-        saveLocalHistory(current)
+        saveLocalHistory(userId, current)
 
         if (!userId.isNullOrEmpty()) {
             withContext(Dispatchers.IO) {
@@ -78,9 +84,9 @@ class HistoryManager(private val context: Context) {
     }
 
     suspend fun deleteHistoryItem(userId: String?, item: GenerationHistory) {
-        val current = getLocalHistory().toMutableList()
+        val current = getLocalHistory(userId).toMutableList()
         current.removeAll { it.id == item.id || (it.audioUrl == item.audioUrl && item.audioUrl.isNotEmpty()) }
-        saveLocalHistory(current)
+        saveLocalHistory(userId, current)
         if (!userId.isNullOrEmpty() && item.id.isNotEmpty()) {
             withContext(Dispatchers.IO) {
                 try {
@@ -92,27 +98,25 @@ class HistoryManager(private val context: Context) {
     }
 
     suspend fun fetchHistory(userId: String?): List<GenerationHistory> {
-        val local = getLocalHistory()
+        val local = getLocalHistory(userId)
         if (userId.isNullOrEmpty()) return local
         return withContext(Dispatchers.IO) {
             try {
                 val remote = firestoreRepository.getHistory(userId)
-                if (remote.isNotEmpty()) {
-                    val map = LinkedHashMap<String, GenerationHistory>()
-                    for (item in local) {
-                        val key = if (item.id.isNotEmpty()) item.id else item.audioUrl
-                        if (key.isNotEmpty()) map[key] = item
-                    }
-                    for (item in remote) {
-                        val key = if (item.id.isNotEmpty()) item.id else item.audioUrl
-                        if (key.isNotEmpty()) map[key] = item
-                    }
-                    val sorted = map.values.sortedByDescending { it.date }
-                    saveLocalHistory(sorted)
-                    sorted
-                } else {
-                    local
+                val map = LinkedHashMap<String, GenerationHistory>()
+                for (item in remote) {
+                    val key = if (item.id.isNotEmpty()) item.id else item.audioUrl
+                    if (key.isNotEmpty()) map[key] = item
                 }
+                for (item in local) {
+                    val key = if (item.id.isNotEmpty()) item.id else item.audioUrl
+                    if (key.isNotEmpty() && !map.containsKey(key)) {
+                        map[key] = item
+                    }
+                }
+                val sorted = map.values.sortedByDescending { it.date }
+                saveLocalHistory(userId, sorted)
+                sorted
             } catch (e: Exception) {
                 local
             }

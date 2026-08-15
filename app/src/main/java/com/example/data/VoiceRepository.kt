@@ -70,6 +70,43 @@ class VoiceRepository(context: Context) {
         }
     }
 
+    suspend fun saveCustomVoice(voice: VoiceEntity) {
+        withContext(Dispatchers.IO) {
+            try {
+                voiceDao.insertVoice(voice)
+                firestoreRepository.saveCustomVoice(voice)
+            } catch (e: Exception) {
+                Log.e("VoiceRepository", "Error saving custom voice: ${e.message}")
+            }
+        }
+    }
+
+    suspend fun updateCustomVoice(oldName: String, updatedVoice: VoiceEntity) {
+        withContext(Dispatchers.IO) {
+            try {
+                if (oldName != updatedVoice.voiceName) {
+                    voiceDao.deleteVoiceByName(oldName)
+                    firestoreRepository.deleteCustomVoice(oldName)
+                }
+                voiceDao.insertVoice(updatedVoice)
+                firestoreRepository.saveCustomVoice(updatedVoice)
+            } catch (e: Exception) {
+                Log.e("VoiceRepository", "Error updating custom voice: ${e.message}")
+            }
+        }
+    }
+
+    suspend fun deleteCustomVoice(voiceName: String) {
+        withContext(Dispatchers.IO) {
+            try {
+                voiceDao.deleteVoiceByName(voiceName)
+                firestoreRepository.deleteCustomVoice(voiceName)
+            } catch (e: Exception) {
+                Log.e("VoiceRepository", "Error deleting custom voice: ${e.message}")
+            }
+        }
+    }
+
     private fun isInternetAvailable(): Boolean {
         val network = connectivityManager.activeNetwork ?: return false
         val activeNetwork = connectivityManager.getNetworkCapabilities(network) ?: return false

@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
@@ -513,10 +514,30 @@ fun LoginScreen(authManager: AuthManager, onNavigateToMain: () -> Unit, onNaviga
                             checkmarkColor = Color.Black
                         )
                     )
-                    Text(
-                        text = "I accept the Terms and Privacy Policy",
-                        color = Color.Gray,
-                        style = MaterialTheme.typography.bodyMedium
+                    val annotatedString = androidx.compose.ui.text.buildAnnotatedString {
+                        append("I accept the ")
+                        pushStringAnnotation(tag = "TERMS", annotation = "https://example.com/terms")
+                        withStyle(style = androidx.compose.ui.text.SpanStyle(color = Color.Black, textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)) {
+                            append("Terms")
+                        }
+                        pop()
+                        append(" and ")
+                        pushStringAnnotation(tag = "POLICY", annotation = "https://example.com/policy")
+                        withStyle(style = androidx.compose.ui.text.SpanStyle(color = Color.Black, textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)) {
+                            append("Policy")
+                        }
+                        pop()
+                    }
+                    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+                    androidx.compose.foundation.text.ClickableText(
+                        text = annotatedString,
+                        style = MaterialTheme.typography.bodyMedium.copy(color = Color.Gray),
+                        onClick = { offset ->
+                            annotatedString.getStringAnnotations(tag = "TERMS", start = offset, end = offset)
+                                .firstOrNull()?.let { uriHandler.openUri(it.item) }
+                            annotatedString.getStringAnnotations(tag = "POLICY", start = offset, end = offset)
+                                .firstOrNull()?.let { uriHandler.openUri(it.item) }
+                        }
                     )
                 }
                 
@@ -627,6 +648,7 @@ fun SignupScreen(authManager: AuthManager, onNavigateToMain: () -> Unit, onNavig
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .statusBarsPadding()
                     .navigationBarsPadding()
                     .imePadding()
                     .verticalScroll(androidx.compose.foundation.rememberScrollState())
@@ -660,6 +682,32 @@ fun SignupScreen(authManager: AuthManager, onNavigateToMain: () -> Unit, onNavig
                 )
                 
                 if (!isAwaitingOtp) {
+                    Text("Full Name", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = Color.Black)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TextField(
+                        value = fullName,
+                        onValueChange = { fullName = it },
+                        placeholder = { Text("Alex Smith", color = Color.Gray) },
+                        modifier = Modifier.fillMaxWidth().border(1.dp, Color(0xFFE0E0E0), RoundedCornerShape(12.dp)),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color.White,
+                            disabledContainerColor = Color.White,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            disabledIndicatorColor = Color.Transparent,
+                            focusedTextColor = Color.Black,
+                            cursorColor = Color.Black,
+                            unfocusedTextColor = Color.Black
+                        ),
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.Black),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Text, imeAction = androidx.compose.ui.text.input.ImeAction.Next)
+                    )
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+
                     Text("Email address", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = Color.Black)
                     Spacer(modifier = Modifier.height(8.dp))
                     TextField(
@@ -780,10 +828,30 @@ fun SignupScreen(authManager: AuthManager, onNavigateToMain: () -> Unit, onNavig
                                 checkmarkColor = Color.Black
                             )
                         )
-                        Text(
-                            text = "I accept the Terms and Privacy Policy",
-                            color = Color.Gray,
-                            style = MaterialTheme.typography.bodyMedium
+                        val annotatedString = androidx.compose.ui.text.buildAnnotatedString {
+                            append("I accept the ")
+                            pushStringAnnotation(tag = "TERMS", annotation = "https://example.com/terms")
+                            withStyle(style = androidx.compose.ui.text.SpanStyle(color = Color.Black, textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)) {
+                                append("Terms")
+                            }
+                            pop()
+                            append(" and ")
+                            pushStringAnnotation(tag = "POLICY", annotation = "https://example.com/policy")
+                            withStyle(style = androidx.compose.ui.text.SpanStyle(color = Color.Black, textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)) {
+                                append("Policy")
+                            }
+                            pop()
+                        }
+                        val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+                        androidx.compose.foundation.text.ClickableText(
+                            text = annotatedString,
+                            style = MaterialTheme.typography.bodyMedium.copy(color = Color.Gray),
+                            onClick = { offset ->
+                                annotatedString.getStringAnnotations(tag = "TERMS", start = offset, end = offset)
+                                    .firstOrNull()?.let { uriHandler.openUri(it.item) }
+                                annotatedString.getStringAnnotations(tag = "POLICY", start = offset, end = offset)
+                                    .firstOrNull()?.let { uriHandler.openUri(it.item) }
+                            }
                         )
                     }
                     Spacer(modifier = Modifier.height(16.dp))
@@ -849,7 +917,7 @@ fun SignupScreen(authManager: AuthManager, onNavigateToMain: () -> Unit, onNavig
                     modifier = Modifier.fillMaxWidth().height(56.dp),
                     shape = RoundedCornerShape(28.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Black, contentColor = Color.White),
-                    enabled = !isLoading && (if (!isAwaitingOtp) email.isNotBlank() && password.isNotBlank() && termsAccepted else enteredOtp.length == 6)
+                    enabled = !isLoading && (if (!isAwaitingOtp) fullName.isNotBlank() && email.isNotBlank() && password.isNotBlank() && termsAccepted else enteredOtp.length == 6)
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))

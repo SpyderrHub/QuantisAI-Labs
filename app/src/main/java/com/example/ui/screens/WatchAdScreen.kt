@@ -149,7 +149,8 @@ fun WatchAdScreen(authManager: AuthManager, onNavigateBack: () -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color(0xFF090A10))
-                    .padding(start = 20.dp, top = 16.dp, end = 20.dp, bottom = 40.dp),
+                    .navigationBarsPadding()
+                    .padding(start = 20.dp, top = 16.dp, end = 20.dp, bottom = 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Button(
@@ -202,16 +203,16 @@ fun WatchAdScreen(authManager: AuthManager, onNavigateBack: () -> Unit) {
                     enabled = adsWatchedToday < maxAdsPerDay && adState != "loading"
                 ) {
                     if (adState == "loading") {
-                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                     } else {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = Color.White)
+                            Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = if (adsWatchedToday >= maxAdsPerDay) "Limit Reached" else "Watch Ad Now (+30 Credits)", 
                                 fontSize = 16.sp, 
                                 fontWeight = FontWeight.Bold, 
-                                color = Color.White
+                                color = MaterialTheme.colorScheme.onPrimary
                             )
                         }
                     }
@@ -517,7 +518,7 @@ fun HowItWorksStep(
                 Text(
                     text = stepNumber,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onPrimary,
                     fontSize = 10.sp
                 )
             }

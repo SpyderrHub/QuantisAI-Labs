@@ -1,4 +1,5 @@
 package com.example.data
+import android.util.Log
 import kotlinx.coroutines.channels.awaitClose
 
 import androidx.room.Entity
@@ -17,7 +18,9 @@ data class UserProfile(
     var subscriptionType: String = "",
     var subscriptionExpiry: Long = 0L,
     var adsWatchedToday: Int = 0,
-    var lastAdDate: String = ""
+    var lastAdDate: String = "",
+    var voicedesignQuota: Int = 0,
+    var lastVoiceDesignDate: String = ""
 )
 
 data class GenerationHistory(
@@ -123,6 +126,13 @@ class FirestoreRepository {
         return try {
             val docRef = db.collection("users").document(userId)
             val subRef = db.collection("user_subscriptions").document(userId)
+            val voiceQuota = when (plan.lowercase()) {
+                "starter" -> 10
+                "creator" -> 20
+                "pro" -> 30
+                else -> 0
+            }
+            val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
             db.runTransaction { transaction ->
                 val snapshot = transaction.get(docRef)
                 val currentCredits = snapshot.getLong("credits") ?: 100L
@@ -130,7 +140,9 @@ class FirestoreRepository {
                 transaction.update(docRef, mapOf(
                     "subscriptionPlan" to plan,
                     "subscriptionType" to type,
-                    "credits" to newCredits
+                    "credits" to newCredits,
+                    "voicedesignQuota" to voiceQuota,
+                    "lastVoiceDesignDate" to today
                 ))
                 transaction.set(subRef, mapOf(
                     "userId" to userId,
@@ -143,6 +155,22 @@ class FirestoreRepository {
             true
         } catch (e: Exception) {
             android.util.Log.e("FirestoreRepository", "Failed to update subscription", e)
+            false
+        }
+    }
+
+    suspend fun updateVoiceDesignQuota(userId: String, quota: Int, dateStr: String): Boolean {
+        if (db == null) return false
+        return try {
+            val docRef = db.collection("users").document(userId)
+            val updates = mapOf(
+                "voicedesignQuota" to quota,
+                "lastVoiceDesignDate" to dateStr
+            )
+            docRef.update(updates).await()
+            true
+        } catch (e: Exception) {
+            android.util.Log.e("FirestoreRepository", "Failed to update voice design quota", e)
             false
         }
     }
@@ -338,6 +366,26 @@ class FirestoreRepository {
             }
         } catch (e: Exception) {
             defaultVoices
+        }
+    }
+
+    suspend fun saveCustomVoice(voice: VoiceEntity) {
+        if (db != null && voice.voiceName.isNotBlank()) {
+            try {
+                db.collection("voices").document(voice.voiceName).set(voice).await()
+            } catch (e: Exception) {
+                Log.e("FirestoreRepository", "Error saving custom voice: ${e.message}")
+            }
+        }
+    }
+
+    suspend fun deleteCustomVoice(voiceName: String) {
+        if (db != null && voiceName.isNotBlank()) {
+            try {
+                db.collection("voices").document(voiceName).delete().await()
+            } catch (e: Exception) {
+                Log.e("FirestoreRepository", "Error deleting custom voice: ${e.message}")
+            }
         }
     }
 }

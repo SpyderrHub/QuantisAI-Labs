@@ -471,7 +471,7 @@ fun AudioPreviewScreen(
                         .clip(CircleShape)
                         .background(
                             Brush.linearGradient(
-                                colors = listOf(Color(0xFFD63384), Color(0xFF8E2DE2), Color(0xFF4A00E0))
+                                colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)
                             )
                         )
                         .clickable {
@@ -490,7 +490,7 @@ fun AudioPreviewScreen(
                     Icon(
                         imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                         contentDescription = "Play/Pause",
-                        tint = Color.White,
+                        tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(38.dp)
                     )
                 }

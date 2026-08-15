@@ -66,14 +66,39 @@ class MainActivity : ComponentActivity() {
         
         setContent {
             var appSettings by androidx.compose.runtime.remember { 
+                val savedTheme = sharedPrefs.getString("theme", "white") ?: "white"
                 androidx.compose.runtime.mutableStateOf(
                     com.example.ui.theme.AppSettings(
                         language = sharedPrefs.getString("language", "English") ?: "English",
-                        theme = sharedPrefs.getString("theme", "default") ?: "default"
+                        theme = savedTheme
                     )
                 ) 
             }
             
+            androidx.compose.runtime.LaunchedEffect(appSettings.language) {
+                val code = when (appSettings.language) {
+                    "Spanish" -> "es"
+                    "French" -> "fr"
+                    "German" -> "de"
+                    "Italian" -> "it"
+                    "Portuguese" -> "pt"
+                    "Russian" -> "ru"
+                    "Chinese" -> "zh"
+                    "Japanese" -> "ja"
+                    "Korean" -> "ko"
+                    "Arabic" -> "ar"
+                    "Hindi" -> "hi"
+                    "Indonesian" -> "id"
+                    else -> "en"
+                }
+                val locale = java.util.Locale(code)
+                java.util.Locale.setDefault(locale)
+                val config = resources.configuration
+                config.setLocale(locale)
+                @Suppress("DEPRECATION")
+                resources.updateConfiguration(config, resources.displayMetrics)
+            }
+
             androidx.compose.runtime.CompositionLocalProvider(
                 com.example.ui.theme.LocalAppSettings provides appSettings,
                 com.example.ui.theme.LocalAppSettingsUpdater provides { newSettings -> 
