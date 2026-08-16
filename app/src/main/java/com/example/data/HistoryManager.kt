@@ -22,11 +22,15 @@ class HistoryManager(private val context: Context) {
             val array = JSONArray(json)
             for (i in 0 until array.length()) {
                 val obj = array.getJSONObject(i)
+                val type = obj.optString("type", "TTS")
+                if (type.contains("Voice Design", ignoreCase = true) || type.contains("voice_design", ignoreCase = true)) {
+                    continue
+                }
                 list.add(
                     GenerationHistory(
                         id = obj.optString("id", ""),
                         text = obj.optString("text", ""),
-                        type = obj.optString("type", "TTS"),
+                        type = type,
                         date = obj.optLong("date", System.currentTimeMillis()),
                         voiceName = obj.optString("voiceName", ""),
                         duration = obj.optString("duration", ""),
@@ -105,6 +109,9 @@ class HistoryManager(private val context: Context) {
                 val remote = firestoreRepository.getHistory(userId)
                 val map = LinkedHashMap<String, GenerationHistory>()
                 for (item in remote) {
+                    if (item.type.contains("Voice Design", ignoreCase = true) || item.type.contains("voice_design", ignoreCase = true)) {
+                        continue
+                    }
                     val key = if (item.id.isNotEmpty()) item.id else item.audioUrl
                     if (key.isNotEmpty()) map[key] = item
                 }

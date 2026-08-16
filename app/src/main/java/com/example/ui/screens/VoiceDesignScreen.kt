@@ -77,6 +77,7 @@ data class VoiceDesignAudioItem(
 
 class VoiceDesignHistoryManager(context: Context) {
     private val prefs = context.getSharedPreferences("voice_design_audio_prefs", Context.MODE_PRIVATE)
+    private val firestoreRepository = FirestoreRepository()
 
     private fun getPrefKey(userId: String?): String {
         return if (!userId.isNullOrEmpty()) "vd_audios_$userId" else "vd_audios_guest"
@@ -106,17 +107,59 @@ class VoiceDesignHistoryManager(context: Context) {
         }
     }
 
-    fun saveAudio(userId: String?, item: VoiceDesignAudioItem) {
+    suspend fun saveAudio(userId: String?, item: VoiceDesignAudioItem) {
         val current = getAudios(userId).toMutableList()
         current.removeAll { it.id == item.id || (it.audioUrl == item.audioUrl && item.audioUrl.isNotEmpty()) }
         current.add(0, item)
         saveList(userId, current)
+
+        if (!userId.isNullOrEmpty()) {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    firestoreRepository.saveVoiceDesignAudio(userId, item)
+                } catch (_: Exception) {}
+            }
+        }
     }
 
-    fun deleteAudio(userId: String?, audioUrl: String) {
+    suspend fun deleteAudio(userId: String?, audioUrl: String) {
         val current = getAudios(userId).toMutableList()
         current.removeAll { it.audioUrl == audioUrl }
         saveList(userId, current)
+
+        if (!userId.isNullOrEmpty()) {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    firestoreRepository.deleteVoiceDesignAudio(userId, audioUrl)
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
+    suspend fun fetchAudios(userId: String?): List<VoiceDesignAudioItem> {
+        val local = getAudios(userId)
+        if (userId.isNullOrEmpty()) return local
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val remote = firestoreRepository.getVoiceDesignAudios(userId)
+                val map = LinkedHashMap<String, VoiceDesignAudioItem>()
+                for (item in remote) {
+                    val key = if (item.id.isNotEmpty()) item.id else item.audioUrl
+                    if (key.isNotEmpty()) map[key] = item
+                }
+                for (item in local) {
+                    val key = if (item.id.isNotEmpty()) item.id else item.audioUrl
+                    if (key.isNotEmpty() && !map.containsKey(key)) {
+                        map[key] = item
+                    }
+                }
+                val sorted = map.values.sortedByDescending { it.date }
+                saveList(userId, sorted)
+                sorted
+            } catch (e: Exception) {
+                local
+            }
+        }
     }
 
     private fun saveList(userId: String?, list: List<VoiceDesignAudioItem>) {
@@ -159,14 +202,14 @@ fun VoiceDesignScreen(
     authManager: AuthManager,
     onBack: (() -> Unit)? = null,
     onNavigateToTts: (() -> Unit)? = null,
-    onNavigateToSubscription: (() -> Unit)? = null
+    onNavigateToSubscription: (() -> Unit)? = null,
+    onNavigateToAccount: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val clipboardManager = LocalClipboardManager.current
     val firestoreRepo = remember { FirestoreRepository() }
     val voiceRepo = remember { VoiceRepository(context) }
-    val historyManager = remember { HistoryManager(context) }
     val vdHistoryManager = remember { VoiceDesignHistoryManager(context) }
     
     val user by authManager.currentUser.collectAsState()
@@ -261,12 +304,36 @@ fun VoiceDesignScreen(
         } else {
             currentQuota = 0
         }
-        generatedAudios = vdHistoryManager.getAudios(user?.uid)
-        if (generatedAudios.isEmpty() && user != null) {
-            val guestAudios = vdHistoryManager.getAudios(null)
-            if (guestAudios.isNotEmpty()) {
-                guestAudios.forEach { vdHistoryManager.saveAudio(user?.uid, it) }
-                generatedAudios = vdHistoryManager.getAudios(user?.uid)
+        scope.launch {
+            voiceRepo.syncVoicesIfNeeded(user?.uid)
+            if (user != null) {
+                val fetched = vdHistoryManager.fetchAudios(user?.uid)
+                if (fetched.isEmpty()) {
+                    val guestAudios = vdHistoryManager.getAudios(null)
+                    if (guestAudios.isNotEmpty()) {
+                        guestAudios.forEach { vdHistoryManager.saveAudio(user?.uid, it) }
+                        generatedAudios = vdHistoryManager.fetchAudios(user?.uid)
+                    } else {
+                        generatedAudios = fetched
+                    }
+                } else {
+                    generatedAudios = fetched
+                }
+            } else {
+                generatedAudios = vdHistoryManager.getAudios(null)
+            }
+        }
+    }
+
+    // Refresh Voice Design library audios whenever user switches tab or user changes
+    LaunchedEffect(selectedTab, user) {
+        if (selectedTab == 1) {
+            scope.launch {
+                if (user != null) {
+                    generatedAudios = vdHistoryManager.fetchAudios(user?.uid)
+                } else {
+                    generatedAudios = vdHistoryManager.getAudios(null)
+                }
             }
         }
     }
@@ -320,7 +387,7 @@ fun VoiceDesignScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF090A10))
+            .background(MaterialTheme.colorScheme.background)
     ) {
         Column(
             modifier = Modifier
@@ -331,7 +398,9 @@ fun VoiceDesignScreen(
             VoiceDesignTopBar(
                 selectedTab = selectedTab,
                 onTabSelected = { selectedTab = it },
-                onBack = onBack
+                onBack = onBack,
+                userAvatarUrl = userProfile?.avatarUrl,
+                onNavigateToAccount = onNavigateToAccount
             )
 
             // Content view based on tab
@@ -356,6 +425,7 @@ fun VoiceDesignScreen(
                         items(chatMessages, key = { it.id }) { msg ->
                             VoiceDesignChatMessageItem(
                                 message = msg,
+                                userAvatarUrl = userProfile?.avatarUrl,
                                 isPlaying = isPlaying && activePlayingUrl == msg.audioUrl,
                                 currentPlaybackTime = if (activePlayingUrl == msg.audioUrl) currentPlaybackTime else "0:00",
                                 totalPlaybackTime = if (activePlayingUrl == msg.audioUrl) totalPlaybackTime else "0:06",
@@ -388,9 +458,9 @@ fun VoiceDesignScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(vertical = 8.dp),
-                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1B172C)),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                                     shape = RoundedCornerShape(16.dp),
-                                    border = BorderStroke(1.dp, Color(0xFFA78BFA).copy(alpha = 0.5f))
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                                 ) {
                                     Column(
                                         modifier = Modifier.padding(16.dp),
@@ -404,26 +474,26 @@ fun VoiceDesignScreen(
                                             Icon(
                                                 imageVector = Icons.Rounded.Lock,
                                                 contentDescription = "Subscription Required",
-                                                tint = Color(0xFFA78BFA),
+                                                tint = MaterialTheme.colorScheme.primary,
                                                 modifier = Modifier.size(24.dp)
                                             )
                                             Text(
                                                 text = "Unlock Voice Design",
                                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                                color = Color.White
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                         }
                                         Text(
                                             text = "Voice Design is available exclusively for Starter, Creator, and Pro subscription plans. Upgrade to create custom AI voices with daily voice generation quotas.",
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = Color(0xFFD1CEE0),
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                         )
                                         
                                         Column(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .background(Color(0xFF131021), RoundedCornerShape(12.dp))
+                                                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
                                                 .padding(12.dp),
                                             verticalArrangement = Arrangement.spacedBy(6.dp)
                                         ) {
@@ -465,7 +535,7 @@ fun VoiceDesignScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color(0xFF090A10))
+                        .background(MaterialTheme.colorScheme.background)
                         .then(if (!isImeVisible) Modifier.navigationBarsPadding() else Modifier)
                         .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 6.dp)
                 ) {
@@ -553,7 +623,7 @@ fun VoiceDesignScreen(
                                                 isPro = false,
                                                 lastUpdated = System.currentTimeMillis()
                                             )
-                                            voiceRepo.saveCustomVoice(newVoice)
+                                            voiceRepo.saveCustomVoice(user?.uid, newVoice)
                                             selectedVoiceName = vName
                                         } else {
                                             val updatedVoice = selectedVoice.copy(
@@ -562,7 +632,7 @@ fun VoiceDesignScreen(
                                                 referenceText = instructToSend,
                                                 lastUpdated = System.currentTimeMillis()
                                             )
-                                            voiceRepo.updateCustomVoice(selectedVoice.voiceName, updatedVoice)
+                                            voiceRepo.updateCustomVoice(user?.uid, selectedVoice.voiceName, updatedVoice)
                                         }
 
                                         // Save generated audio item to Voice Design Library
@@ -576,19 +646,6 @@ fun VoiceDesignScreen(
                                         vdHistoryManager.saveAudio(user?.uid, generatedItem)
                                         generatedAudios = vdHistoryManager.getAudios(user?.uid)
 
-                                        // Also save to global history manager
-                                        historyManager.saveHistoryItem(
-                                            user?.uid,
-                                            GenerationHistory(
-                                                id = generatedItem.id,
-                                                text = instructToSend,
-                                                type = "Voice Design",
-                                                date = System.currentTimeMillis(),
-                                                voiceName = vName,
-                                                audioUrl = audioUrl
-                                            )
-                                        )
-
                                          chatMessages.add(
                                             VoiceDesignChatMessage(
                                                 isUser = false,
@@ -600,17 +657,30 @@ fun VoiceDesignScreen(
                                             )
                                         )
 
-                                        // Deduct 1 from daily voicedesignQuota and save to Firestore
+                                        // Deduct 1 from daily voicedesignQuota and deduct character length from credits, saving to Firestore
+                                        val totalCharsToDeduct = textToSend.length + instructToSend.length
                                         val newQuota = maxOf(0, currentQuota - 1)
                                         currentQuota = newQuota
                                         if (user != null) {
                                             firestoreRepo.updateVoiceDesignQuota(user!!.uid, newQuota, today)
+                                            val currentCredits = userProfile?.credits ?: 3000
+                                            val updatedCredits = maxOf(0, currentCredits - totalCharsToDeduct)
                                             val currentSaved = userProfile?.savedVoices?.toMutableList() ?: mutableListOf()
                                             if (!currentSaved.contains(vName)) {
                                                 currentSaved.add(0, vName)
                                             }
-                                            val updatedProfile = userProfile?.copy(voicedesignQuota = newQuota, lastVoiceDesignDate = today, savedVoices = currentSaved)
-                                                ?: UserProfile(email = user!!.email ?: "", voicedesignQuota = newQuota, lastVoiceDesignDate = today, savedVoices = currentSaved)
+                                            val updatedProfile = userProfile?.copy(
+                                                credits = updatedCredits,
+                                                voicedesignQuota = newQuota,
+                                                lastVoiceDesignDate = today,
+                                                savedVoices = currentSaved
+                                            ) ?: UserProfile(
+                                                email = user!!.email ?: "",
+                                                credits = updatedCredits,
+                                                voicedesignQuota = newQuota,
+                                                lastVoiceDesignDate = today,
+                                                savedVoices = currentSaved
+                                            )
                                             firestoreRepo.saveUserProfile(user!!.uid, updatedProfile)
                                             userProfile = updatedProfile
                                         }
@@ -661,8 +731,10 @@ fun VoiceDesignScreen(
                     isPlaying = isPlaying,
                     onPlayToggle = { togglePlayPause(it) },
                     onDeleteAudio = { audioUrl ->
-                        vdHistoryManager.deleteAudio(user?.uid, audioUrl)
-                        generatedAudios = vdHistoryManager.getAudios(user?.uid)
+                        scope.launch {
+                            vdHistoryManager.deleteAudio(user?.uid, audioUrl)
+                            generatedAudios = vdHistoryManager.getAudios(user?.uid)
+                        }
                         Toast.makeText(context, "Deleted audio from Library", Toast.LENGTH_SHORT).show()
                     },
                     onUseVoice = { audioItem ->
@@ -677,7 +749,7 @@ fun VoiceDesignScreen(
                                     description = audioItem.referenceText.ifEmpty { existing.description },
                                     lastUpdated = System.currentTimeMillis()
                                 )
-                                voiceRepo.updateCustomVoice(existing.voiceName, updated)
+                                voiceRepo.updateCustomVoice(user?.uid, existing.voiceName, updated)
                             } else {
                                 val newVoice = VoiceEntity(
                                     voiceName = audioItem.voiceName,
@@ -689,7 +761,7 @@ fun VoiceDesignScreen(
                                     isPro = false,
                                     lastUpdated = System.currentTimeMillis()
                                 )
-                                voiceRepo.saveCustomVoice(newVoice)
+                                voiceRepo.saveCustomVoice(user?.uid, newVoice)
                             }
 
                             if (user != null && userProfile != null) {
@@ -727,7 +799,7 @@ fun VoiceDesignScreen(
                         isPro = false,
                         lastUpdated = System.currentTimeMillis()
                     )
-                    voiceRepo.saveCustomVoice(newVoice)
+                    voiceRepo.saveCustomVoice(user?.uid, newVoice)
                     selectedVoiceName = name
                     Toast.makeText(context, "Voice '$name' saved!", Toast.LENGTH_SHORT).show()
                 }
@@ -750,7 +822,7 @@ fun VoiceDesignScreen(
                         referenceText = newPrompt,
                         lastUpdated = System.currentTimeMillis()
                     )
-                    voiceRepo.updateCustomVoice(oldVoice.voiceName, updated)
+                    voiceRepo.updateCustomVoice(user?.uid, oldVoice.voiceName, updated)
                     selectedVoiceName = newName
                     Toast.makeText(context, "Voice '$newName' updated!", Toast.LENGTH_SHORT).show()
                 }
@@ -759,7 +831,7 @@ fun VoiceDesignScreen(
                 val oldVoice = voiceToManage!!
                 voiceToManage = null
                 scope.launch {
-                    voiceRepo.deleteCustomVoice(oldVoice.voiceName)
+                    voiceRepo.deleteCustomVoice(user?.uid, oldVoice.voiceName)
                     if (user != null && userProfile != null) {
                         val currentSaved = userProfile!!.savedVoices.toMutableList()
                         if (currentSaved.contains(oldVoice.voiceName)) {
@@ -788,7 +860,7 @@ fun VoiceDesignScreen(
         AlertDialog(
             onDismissRequest = { showDisclaimerDialog = false },
             shape = RoundedCornerShape(20.dp),
-            containerColor = Color(0xFF1E1C2A),
+            containerColor = MaterialTheme.colorScheme.surface,
             icon = {
                 Icon(
                     imageVector = Icons.Rounded.Info,
@@ -800,7 +872,7 @@ fun VoiceDesignScreen(
             title = {
                 Text(
                     text = "AI Audio Disclaimer & Guidelines",
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                 )
             },
@@ -809,22 +881,22 @@ fun VoiceDesignScreen(
                     Text(
                         text = "• AI-generated speech is produced automatically using neural voice models.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFFD1CEE0)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         text = "• Pronunciations, pitch, or emotional tone may occasionally contain minor inaccuracies.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFFD1CEE0)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         text = "• Please review and verify all synthesized audio before publishing or using in production.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFFD1CEE0)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         text = "• Remaining quota is deducted based on text character length.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFFD1CEE0)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             },
@@ -842,7 +914,9 @@ fun VoiceDesignScreen(
 fun VoiceDesignTopBar(
     selectedTab: Int,
     onTabSelected: (Int) -> Unit,
-    onBack: (() -> Unit)?
+    onBack: (() -> Unit)?,
+    userAvatarUrl: String? = null,
+    onNavigateToAccount: (() -> Unit)? = null
 ) {
     Row(
         modifier = Modifier
@@ -863,12 +937,12 @@ fun VoiceDesignTopBar(
                     modifier = Modifier
                         .size(36.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF1B1B24))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                         contentDescription = "Back",
-                        tint = Color.White,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -879,7 +953,7 @@ fun VoiceDesignTopBar(
                     fontWeight = FontWeight.Bold,
                     fontSize = 19.sp
                 ),
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -889,8 +963,8 @@ fun VoiceDesignTopBar(
         Row(
             modifier = Modifier
                 .clip(RoundedCornerShape(24.dp))
-                .background(Color(0xFF1B1A24))
-                .border(1.dp, Color(0xFF2E2C3D), RoundedCornerShape(24.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(24.dp))
                 .padding(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -908,7 +982,7 @@ fun VoiceDesignTopBar(
                 Icon(
                     imageVector = Icons.Rounded.AutoAwesome,
                     contentDescription = null,
-                    tint = if (isDesign) MaterialTheme.colorScheme.onPrimary else Color(0xFFA09DAE),
+                    tint = if (isDesign) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp)
                 )
                 Text(
@@ -917,7 +991,7 @@ fun VoiceDesignTopBar(
                         fontWeight = if (isDesign) FontWeight.Bold else FontWeight.Medium,
                         fontSize = 13.sp
                     ),
-                    color = if (isDesign) MaterialTheme.colorScheme.onPrimary else Color(0xFFA09DAE)
+                    color = if (isDesign) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -935,7 +1009,7 @@ fun VoiceDesignTopBar(
                 Icon(
                     imageVector = Icons.Rounded.Folder,
                     contentDescription = null,
-                    tint = if (isLibrary) MaterialTheme.colorScheme.onPrimary else Color(0xFFA09DAE),
+                    tint = if (isLibrary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp)
                 )
                 Text(
@@ -944,7 +1018,7 @@ fun VoiceDesignTopBar(
                         fontWeight = if (isLibrary) FontWeight.Bold else FontWeight.Medium,
                         fontSize = 13.sp
                     ),
-                    color = if (isLibrary) MaterialTheme.colorScheme.onPrimary else Color(0xFFA09DAE)
+                    color = if (isLibrary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -955,6 +1029,7 @@ fun VoiceDesignTopBar(
 @Composable
 fun VoiceDesignChatMessageItem(
     message: VoiceDesignChatMessage,
+    userAvatarUrl: String? = null,
     isPlaying: Boolean,
     currentPlaybackTime: String,
     totalPlaybackTime: String,
@@ -990,15 +1065,27 @@ fun VoiceDesignChatMessageItem(
                 modifier = Modifier
                     .size(36.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFF282638)),
+                    .background(Color.White),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.Person,
-                    contentDescription = "User",
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
-                )
+                val avatar = userAvatarUrl ?: ""
+                if (avatar.isNotEmpty()) {
+                    coil.compose.AsyncImage(
+                        model = avatar,
+                        contentDescription = "User Profile Avatar",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Rounded.Person,
+                        contentDescription = "User Profile Avatar",
+                        tint = Color.Black,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         }
     } else {
@@ -1028,7 +1115,7 @@ fun VoiceDesignChatMessageItem(
                     Icon(
                         imageVector = Icons.Rounded.GraphicEq,
                         contentDescription = "AI Assistant",
-                        tint = Color.White,
+                        tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -1043,8 +1130,8 @@ fun VoiceDesignChatMessageItem(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(4.dp, 20.dp, 20.dp, 20.dp))
-                        .background(Color(0xFF16151C))
-                        .border(1.dp, Color(0xFF272535), RoundedCornerShape(4.dp, 20.dp, 20.dp, 20.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(4.dp, 20.dp, 20.dp, 20.dp))
                         .padding(14.dp)
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1054,7 +1141,7 @@ fun VoiceDesignChatMessageItem(
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Normal
                             ),
-                            color = Color(0xFFE2E0EC)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
 
                         // Embedded Audio Preview Card if available
@@ -1086,7 +1173,7 @@ fun VoiceDesignChatMessageItem(
                             Icon(
                                 imageVector = Icons.Rounded.ContentCopy,
                                 contentDescription = "Copy",
-                                tint = Color(0xFF8E8B9E),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -1095,7 +1182,7 @@ fun VoiceDesignChatMessageItem(
                             Icon(
                                 imageVector = Icons.Rounded.ThumbUp,
                                 contentDescription = "Like",
-                                tint = if (message.isLiked) MaterialTheme.colorScheme.primary else Color(0xFF8E8B9E),
+                                tint = if (message.isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -1171,8 +1258,8 @@ fun EmbeddedAudioPreviewCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFF1E1D2A))
-            .border(1.dp, Color(0xFF323045), RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
             .padding(12.dp)
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1198,7 +1285,7 @@ fun EmbeddedAudioPreviewCard(
                     Icon(
                         imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                         contentDescription = "Play/Pause",
-                        tint = Color.White,
+                        tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -1215,11 +1302,11 @@ fun EmbeddedAudioPreviewCard(
                 Text(
                     text = "$currentPlaybackTime / $totalPlaybackTime",
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                    color = Color(0xFFA09DAE)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            Divider(color = Color(0xFF2A283B), thickness = 1.dp)
+            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thickness = 1.dp)
 
             // Voice Details Bottom Row (Avatar, Name/Tags, [ Use Voice ])
             Row(
@@ -1244,14 +1331,14 @@ fun EmbeddedAudioPreviewCard(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp
                             ),
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = voiceTags,
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                            color = Color(0xFF8E8B9E),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -1285,6 +1372,7 @@ fun EmbeddedAudioPreviewCard(
 @Composable
 fun WaveformCanvas(isPlaying: Boolean, modifier: Modifier = Modifier) {
     val activeColor = MaterialTheme.colorScheme.primary
+    val inactiveColor = MaterialTheme.colorScheme.outlineVariant
     Canvas(modifier = modifier) {
         val barCount = 28
         val width = size.width
@@ -1306,7 +1394,7 @@ fun WaveformCanvas(isPlaying: Boolean, modifier: Modifier = Modifier) {
             val color = if (isPlaying && i < barCount / 2) {
                 activeColor
             } else {
-                Color(0xFF4C4660)
+                inactiveColor
             }
 
             drawRoundRect(
@@ -1343,7 +1431,7 @@ fun AssistantGeneratingBubble() {
         Text(
             text = "Designing custom voice... Please wait...",
             style = MaterialTheme.typography.bodySmall,
-            color = Color(0xFFA09DAE)
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -1358,10 +1446,10 @@ fun VoiceChipItem(
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(20.dp))
-            .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else Color(0xFF16151C))
+            .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant)
             .border(
                 1.dp,
-                if (isSelected) MaterialTheme.colorScheme.primary else Color(0xFF272535),
+                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                 RoundedCornerShape(20.dp)
             )
             .clickable { onClick() }
@@ -1380,7 +1468,7 @@ fun VoiceChipItem(
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                 fontSize = 12.sp
             ),
-            color = if (isSelected) Color.White else Color(0xFFC0BDCC)
+            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -1391,7 +1479,7 @@ fun NewVoiceChipButton(onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFF121118))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
             .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
             .clickable { onClick() }
             .padding(horizontal = 14.dp, vertical = 8.dp),
@@ -1427,8 +1515,8 @@ fun VoiceDesignInputBar(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(30.dp))
-            .background(Color(0xFF16151C))
-            .border(1.dp, Color(0xFF29273A), RoundedCornerShape(30.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(30.dp))
             .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1438,12 +1526,12 @@ fun VoiceDesignInputBar(
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(Color(0xFF22202E))
+                .background(MaterialTheme.colorScheme.surface)
         ) {
             Icon(
                 imageVector = Icons.Rounded.Mic,
                 contentDescription = "Mic",
-                tint = Color(0xFFB0ACBF),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)
             )
         }
@@ -1453,9 +1541,11 @@ fun VoiceDesignInputBar(
         // Text Input Field
         BasicTextField(
             value = value,
-            onValueChange = onValueChange,
+            onValueChange = { newValue ->
+                onValueChange(newValue.take(100))
+            },
             modifier = Modifier.weight(1f),
-            textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
+            textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp),
             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
             keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSend = { onSend() }),
@@ -1463,7 +1553,7 @@ fun VoiceDesignInputBar(
                 if (value.isEmpty()) {
                     Text(
                         text = "Describe the voice you want to design...".tr(),
-                        style = TextStyle(color = Color(0xFF6B677C), fontSize = 13.sp)
+                        style = TextStyle(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
                     )
                 }
                 innerTextField()
@@ -1483,20 +1573,20 @@ fun VoiceDesignInputBar(
                     if (value.isNotBlank() && !isGenerating)
                         Brush.linearGradient(colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary))
                     else
-                        SolidColor(Color(0xFF2D2A3A))
+                        SolidColor(MaterialTheme.colorScheme.surface)
                 )
         ) {
             if (isGenerating) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(18.dp),
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onPrimary,
                     strokeWidth = 2.dp
                 )
             } else {
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.Send,
                     contentDescription = "Send",
-                    tint = if (value.isNotBlank()) Color.White else Color(0xFF6B677C),
+                    tint = if (value.isNotBlank()) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -1515,10 +1605,10 @@ fun VoiceDesignCard(
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(16.dp))
-            .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else Color(0xFF16151C))
+            .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant)
             .border(
                 1.dp,
-                if (isSelected) MaterialTheme.colorScheme.primary else Color(0xFF29273A),
+                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                 RoundedCornerShape(16.dp)
             )
             .clickable { onClick() }
@@ -1537,7 +1627,7 @@ fun VoiceDesignCard(
                 fontWeight = FontWeight.Bold,
                 fontSize = 13.sp
             ),
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -1548,7 +1638,7 @@ fun VoiceDesignCard(
             Icon(
                 imageVector = Icons.Rounded.Edit,
                 contentDescription = "Edit voice",
-                tint = if (isSelected) MaterialTheme.colorScheme.primary else Color(0xFFA09DAE),
+                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(13.dp)
             )
         }
@@ -1568,8 +1658,8 @@ fun EditVoiceModalDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF16151F),
-        titleContentColor = Color.White,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
         shape = RoundedCornerShape(24.dp),
         title = {
             Row(
@@ -1596,13 +1686,13 @@ fun EditVoiceModalDialog(
                 OutlinedTextField(
                     value = voiceName,
                     onValueChange = { voiceName = it },
-                    label = { Text("Voice Name", color = Color(0xFFA09DAE)) },
+                    label = { Text("Voice Name", color = MaterialTheme.colorScheme.onSurfaceVariant) },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = Color(0xFF2D2B3F),
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1610,15 +1700,15 @@ fun EditVoiceModalDialog(
                 // Prompt Field
                 OutlinedTextField(
                     value = voicePrompt,
-                    onValueChange = { voicePrompt = it },
-                    label = { Text("Voice Prompt / Description", color = Color(0xFFA09DAE)) },
+                    onValueChange = { voicePrompt = it.take(100) },
+                    label = { Text("Voice Prompt / Description", color = MaterialTheme.colorScheme.onSurfaceVariant) },
                     minLines = 2,
                     maxLines = 4,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = Color(0xFF2D2B3F),
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1662,7 +1752,7 @@ fun EditVoiceModalDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel".tr(), color = Color(0xFFA09DAE))
+                Text("Cancel".tr(), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     )
@@ -1679,8 +1769,8 @@ fun CreateVoiceModalDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF16151F),
-        titleContentColor = Color.White,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
         shape = RoundedCornerShape(24.dp),
         title = {
             Row(
@@ -1707,14 +1797,14 @@ fun CreateVoiceModalDialog(
                 OutlinedTextField(
                     value = voiceName,
                     onValueChange = { voiceName = it },
-                    label = { Text("Voice Name", color = Color(0xFFA09DAE)) },
-                    placeholder = { Text("e.g. Calm Deep Narrator", color = Color(0xFF6B677C)) },
+                    label = { Text("Voice Name", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                    placeholder = { Text("e.g. Calm Deep Narrator", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)) },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = Color(0xFF2D2B3F),
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1722,15 +1812,15 @@ fun CreateVoiceModalDialog(
                 // Prompt Field
                 OutlinedTextField(
                     value = voicePrompt,
-                    onValueChange = { voicePrompt = it },
-                    label = { Text("Voice Prompt / Description", color = Color(0xFFA09DAE)) },
-                    placeholder = { Text("e.g. Deep, calm male voice, 30s, Hindi accent...", color = Color(0xFF6B677C)) },
+                    onValueChange = { voicePrompt = it.take(100) },
+                    label = { Text("Voice Prompt / Description", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                    placeholder = { Text("e.g. Deep, calm male voice, 30s, Hindi accent...", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)) },
                     minLines = 3,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = Color(0xFF2D2B3F),
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1752,7 +1842,7 @@ fun CreateVoiceModalDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel".tr(), color = Color(0xFFA09DAE))
+                Text("Cancel".tr(), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     )
@@ -1787,19 +1877,19 @@ fun VoiceDesignLibraryView(
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
-            placeholder = { Text("Search generated audios...", color = Color(0xFF6B677C)) },
+            placeholder = { Text("Search generated audios...", color = MaterialTheme.colorScheme.onSurfaceVariant) },
             leadingIcon = {
-                Icon(Icons.Rounded.Search, contentDescription = null, tint = Color(0xFFA09DAE))
+                Icon(Icons.Rounded.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             },
             singleLine = true,
             shape = RoundedCornerShape(24.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = MaterialTheme.colorScheme.primary,
-                unfocusedBorderColor = Color(0xFF29273A),
-                focusedContainerColor = Color(0xFF16151C),
-                unfocusedContainerColor = Color(0xFF16151C),
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White
+                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                unfocusedTextColor = MaterialTheme.colorScheme.onSurface
             ),
             modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
         )
@@ -1816,18 +1906,18 @@ fun VoiceDesignLibraryView(
                     Icon(
                         imageVector = Icons.Rounded.Folder,
                         contentDescription = null,
-                        tint = Color(0xFF3F3C54),
+                        tint = MaterialTheme.colorScheme.outlineVariant,
                         modifier = Modifier.size(56.dp)
                     )
                     Text(
                         text = "No generated audios in library",
                         style = MaterialTheme.typography.titleMedium,
-                        color = Color(0xFFA09DAE)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         text = "Generate speech in Voice Design tab to save audios here!",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF6B677C)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -1865,8 +1955,8 @@ fun VoiceLibraryItemCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFF16151F))
-            .border(1.dp, Color(0xFF29273A), RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(20.dp))
             .padding(14.dp)
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1892,12 +1982,12 @@ fun VoiceLibraryItemCard(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 15.sp
                             ),
-                            color = Color.White
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = if (audioItem.referenceText.isNotBlank()) audioItem.referenceText else "Generated Voice Audio",
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                            color = Color(0xFFA09DAE),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )

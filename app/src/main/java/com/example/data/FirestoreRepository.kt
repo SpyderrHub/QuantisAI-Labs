@@ -302,6 +302,9 @@ class FirestoreRepository {
         // Deduplicate by ID or audioUrl and sort by date descending
         val uniqueMap = LinkedHashMap<String, GenerationHistory>()
         for (item in resultList) {
+            if (item.type.contains("Voice Design", ignoreCase = true) || item.type.contains("voice_design", ignoreCase = true)) {
+                continue
+            }
             val key = if (item.id.isNotEmpty()) item.id else item.audioUrl
             if (key.isNotEmpty() && !uniqueMap.containsKey(key)) {
                 uniqueMap[key] = item
@@ -311,82 +314,264 @@ class FirestoreRepository {
         return uniqueMap.values.sortedByDescending { it.date }
     }
 
-    suspend fun getVoices(): List<VoiceEntity> {
-        val defaultVoices = listOf(
-            VoiceEntity("Intellectual Woman", "English (US)", "Female", true, "Smart & Clear", "", "https://i.pravatar.cc/150?u=IntellectualWoman", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Casual Narrator", "English (US)", "Male", true, "Casual", "", "https://i.pravatar.cc/150?u=CasualNarrator", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Steady Woman", "English (UK)", "Female", true, "Steady", "", "https://i.pravatar.cc/150?u=SteadyWoman", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Asmr Girl", "English (US)", "Female", true, "Soft & Whispering", "", "https://i.pravatar.cc/150?u=AsmrGirl", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Radiant Girl", "English (US)", "Female", true, "Bright & Warm", "", "https://i.pravatar.cc/150?u=RadiantGirl", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Trustworthy Man", "English (UK)", "Male", true, "Deep & Reliable", "", "https://i.pravatar.cc/150?u=TrustworthyMan", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Captivating Speaker", "English (US)", "Male", true, "Engaging", "", "https://i.pravatar.cc/150?u=CaptivatingSpeaker", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Whispering Girl", "English (US)", "Female", true, "Quiet & Soft", "", "https://i.pravatar.cc/150?u=WhisperingGirl", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Explanatory Man", "English (US)", "Male", true, "Informative", "", "https://i.pravatar.cc/150?u=ExplanatoryMan", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Aria", "English (US)", "Female", true, "Friendly", "", "https://i.pravatar.cc/150?u=Aria", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Roger", "English (UK)", "Male", false, "Professional", "", "https://i.pravatar.cc/150?u=Roger", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Sarah", "English (US)", "Female", false, "Warm", "", "https://i.pravatar.cc/150?u=Sarah", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Laura", "French", "Female", true, "Elegant", "", "https://i.pravatar.cc/150?u=Laura", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Mateo", "Spanish", "Male", false, "Energetic", "", "https://i.pravatar.cc/150?u=Mateo", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Yuki", "Japanese", "Female", true, "Calm", "", "https://i.pravatar.cc/150?u=Yuki", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Hans", "German", "Male", false, "Authoritative", "", "https://i.pravatar.cc/150?u=Hans", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Chloe", "English (AU)", "Female", true, "Bright", "", "https://i.pravatar.cc/150?u=Chloe", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Raj", "Hindi", "Male", false, "Clear", "", "https://i.pravatar.cc/150?u=Raj", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Sofia", "Italian", "Female", true, "Expressive", "", "https://i.pravatar.cc/150?u=Sofia", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Wei", "Chinese", "Male", false, "Neutral", "", "https://i.pravatar.cc/150?u=Wei", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Isabella", "Spanish (MX)", "Female", false, "Sweet", "", "https://i.pravatar.cc/150?u=Isabella", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Liam", "English (IE)", "Male", true, "Conversational", "", "https://i.pravatar.cc/150?u=Liam", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Emma", "English (US)", "Female", false, "Narrative", "", "https://i.pravatar.cc/150?u=Emma", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Noah", "English (CA)", "Male", true, "Deep", "", "https://i.pravatar.cc/150?u=Noah", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Mia", "English (UK)", "Female", false, "Childlike", "", "https://i.pravatar.cc/150?u=Mia", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Warm Storyteller", "English (US)", "Female", true, "Warm & Soothing", "", "https://i.pravatar.cc/150?u=WarmStoryteller", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Energetic Hero", "English (US)", "Male", true, "Bold & Vibrant", "", "https://i.pravatar.cc/150?u=EnergeticHero", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Calm Mentor", "English (UK)", "Male", true, "Wise & Patient", "", "https://i.pravatar.cc/150?u=CalmMentor", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Gentle Reader", "English (US)", "Female", false, "Soft & Rhythmic", "", "https://i.pravatar.cc/150?u=GentleReader", "https://actions.google.com/sounds/v1/speech/test_tone.ogg"),
-            VoiceEntity("Bold Anchor", "English (US)", "Male", true, "Commanding", "", "https://i.pravatar.cc/150?u=BoldAnchor", "https://actions.google.com/sounds/v1/speech/test_tone.ogg")
-        )
-        if (db == null) return defaultVoices
-        return try {
-            
-            val snapshot = db.collection("voices").get().await()
-            if (snapshot.isEmpty) {
-                defaultVoices.forEach {
-                    db.collection("voices").document(it.voiceName).set(it).await()
+    suspend fun getVoices(userId: String? = null): List<VoiceEntity> {
+        val resultList = mutableListOf<VoiceEntity>()
+        if (db != null) {
+            try {
+                val snapshot = db.collection("voices").get().await()
+                if (!snapshot.isEmpty) {
+                    val remoteVoices = snapshot.toObjects(VoiceEntity::class.java)
+                    resultList.addAll(remoteVoices.filter { it.voiceName.isNotEmpty() })
                 }
-                defaultVoices
-            } else {
-                val voices = snapshot.toObjects(VoiceEntity::class.java)
-                if (voices.any { it.voiceName.isEmpty() || it.avatarUrl.isEmpty() }) {
-                    defaultVoices.forEach {
-                        db.collection("voices").document(it.voiceName).set(it).await()
+            } catch (e: Exception) {
+                Log.e("FirestoreRepository", "Error fetching global voices: ${e.message}")
+            }
+
+            if (!userId.isNullOrEmpty()) {
+                try {
+                    val userCustomSnapshot = db.collection("users").document(userId).collection("custom_voices").get().await()
+                    if (!userCustomSnapshot.isEmpty) {
+                        val userVoices = userCustomSnapshot.toObjects(VoiceEntity::class.java)
+                        resultList.addAll(userVoices.filter { it.voiceName.isNotEmpty() })
                     }
-                    defaultVoices
-                } else {
-                    voices
+                } catch (e: Exception) {
+                    Log.e("FirestoreRepository", "Error fetching user custom voices: ${e.message}")
                 }
             }
-        } catch (e: Exception) {
-            defaultVoices
         }
+
+        val map = LinkedHashMap<String, VoiceEntity>()
+        for (v in resultList) {
+            if (v.voiceName.isNotEmpty()) {
+                // Ignore any fake hardcoded mock voices if previously saved in database
+                if (v.audioUrl == "https://actions.google.com/sounds/v1/speech/test_tone.ogg" ||
+                    v.avatarUrl.startsWith("https://i.pravatar.cc/150?u=")
+                ) {
+                    continue
+                }
+                map[v.voiceName] = v
+            }
+        }
+        return map.values.toList()
     }
 
-    suspend fun saveCustomVoice(voice: VoiceEntity) {
+    suspend fun saveCustomVoice(userId: String? = null, voice: VoiceEntity) {
         if (db != null && voice.voiceName.isNotBlank()) {
             try {
                 db.collection("voices").document(voice.voiceName).set(voice).await()
             } catch (e: Exception) {
-                Log.e("FirestoreRepository", "Error saving custom voice: ${e.message}")
+                Log.e("FirestoreRepository", "Error saving global custom voice: ${e.message}")
+            }
+            if (!userId.isNullOrEmpty()) {
+                try {
+                    db.collection("users").document(userId).collection("custom_voices").document(voice.voiceName).set(voice).await()
+                } catch (e: Exception) {
+                    Log.e("FirestoreRepository", "Error saving user custom voice: ${e.message}")
+                }
             }
         }
     }
 
-    suspend fun deleteCustomVoice(voiceName: String) {
+    suspend fun deleteCustomVoice(userId: String? = null, voiceName: String) {
         if (db != null && voiceName.isNotBlank()) {
             try {
                 db.collection("voices").document(voiceName).delete().await()
             } catch (e: Exception) {
-                Log.e("FirestoreRepository", "Error deleting custom voice: ${e.message}")
+                Log.e("FirestoreRepository", "Error deleting global custom voice: ${e.message}")
+            }
+            if (!userId.isNullOrEmpty()) {
+                try {
+                    db.collection("users").document(userId).collection("custom_voices").document(voiceName).delete().await()
+                } catch (e: Exception) {
+                    Log.e("FirestoreRepository", "Error deleting user custom voice: ${e.message}")
+                }
             }
         }
+    }
+
+    suspend fun saveVoiceDesignAudio(userId: String, item: com.example.ui.screens.VoiceDesignAudioItem) {
+        if (db == null || userId.isEmpty()) return
+        val docId = item.id.ifEmpty { java.util.UUID.randomUUID().toString() }
+        val data = mapOf(
+            "id" to docId,
+            "voiceName" to item.voiceName,
+            "referenceText" to item.referenceText,
+            "text" to item.referenceText,
+            "audioUrl" to item.audioUrl,
+            "audio_storage_path" to item.audioUrl,
+            "type" to "Voice Design",
+            "date" to item.date,
+            "createdAt" to item.date
+        )
+        try {
+            db.collection("users").document(userId).collection("omnivoice_generations")
+                .document(docId)
+                .set(data)
+                .await()
+        } catch (e: Exception) {
+            Log.e("FirestoreRepository", "Error saving to users/$userId/omnivoice_generations: ${e.message}")
+        }
+        try {
+            db.collection("users").document(userId).collection("voice_design_audios")
+                .document(docId)
+                .set(data)
+                .await()
+        } catch (e: Exception) {
+            Log.e("FirestoreRepository", "Error saving voice_design_audios: ${e.message}")
+        }
+    }
+
+    suspend fun deleteVoiceDesignAudio(userId: String, audioUrl: String) {
+        if (db == null || userId.isEmpty()) return
+        try {
+            val omniSnapshot = db.collection("users").document(userId).collection("omnivoice_generations")
+                .whereEqualTo("audioUrl", audioUrl)
+                .get().await()
+            for (doc in omniSnapshot.documents) {
+                doc.reference.delete().await()
+            }
+        } catch (e: Exception) {
+            Log.e("FirestoreRepository", "Error deleting from omnivoice_generations: ${e.message}")
+        }
+        try {
+            val snapshot = db.collection("users").document(userId).collection("voice_design_audios")
+                .whereEqualTo("audioUrl", audioUrl)
+                .get().await()
+            for (doc in snapshot.documents) {
+                doc.reference.delete().await()
+            }
+        } catch (e: Exception) {
+            Log.e("FirestoreRepository", "Error deleting voice_design_audio: ${e.message}")
+        }
+        try {
+            val historySnapshot = db.collection("users").document(userId).collection("history")
+                .whereEqualTo("audioUrl", audioUrl)
+                .get().await()
+            for (doc in historySnapshot.documents) {
+                doc.reference.delete().await()
+            }
+        } catch (_: Exception) {}
+    }
+
+    suspend fun getVoiceDesignAudios(userId: String): List<com.example.ui.screens.VoiceDesignAudioItem> {
+        if (db == null || userId.isEmpty()) return emptyList()
+        val list = mutableListOf<com.example.ui.screens.VoiceDesignAudioItem>()
+        
+        // 1. Fetch from users/{userId}/omnivoice_generations where type is Voice Design or missing
+        try {
+            val omniSnapshot = db.collection("users").document(userId).collection("omnivoice_generations")
+                .get().await()
+            for (doc in omniSnapshot.documents) {
+                val type = doc.getString("type") ?: ""
+                val audioUrl = doc.getString("audioUrl")
+                    ?: doc.getString("audio_storage_path")
+                    ?: doc.getString("audioPath")
+                    ?: ""
+                if (audioUrl.isNotEmpty() && (type.isEmpty() || type.contains("Voice Design", ignoreCase = true) || type.contains("voice_design", ignoreCase = true))) {
+                    val voiceName = doc.getString("voiceName") ?: doc.getString("voice_name") ?: "Custom Voice"
+                    val refText = doc.getString("referenceText") ?: doc.getString("text") ?: ""
+                    val date = doc.getLong("date") ?: doc.getLong("createdAt") ?: System.currentTimeMillis()
+                    list.add(
+                        com.example.ui.screens.VoiceDesignAudioItem(
+                            id = doc.id,
+                            voiceName = voiceName,
+                            referenceText = refText,
+                            audioUrl = audioUrl,
+                            date = date
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("FirestoreRepository", "Error fetching users/$userId/omnivoice_generations: ${e.message}")
+        }
+
+        // 2. Fetch from users/{userId}/voice_design_audios
+        try {
+            val snapshot = db.collection("users").document(userId).collection("voice_design_audios")
+                .get().await()
+            for (doc in snapshot.documents) {
+                val voiceName = doc.getString("voiceName") ?: ""
+                val refText = doc.getString("referenceText") ?: doc.getString("text") ?: ""
+                val audioUrl = doc.getString("audioUrl") ?: doc.getString("audio_storage_path") ?: ""
+                val date = doc.getLong("date") ?: doc.getLong("createdAt") ?: System.currentTimeMillis()
+                if (audioUrl.isNotEmpty()) {
+                    list.add(
+                        com.example.ui.screens.VoiceDesignAudioItem(
+                            id = doc.id,
+                            voiceName = voiceName,
+                            referenceText = refText,
+                            audioUrl = audioUrl,
+                            date = date
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("FirestoreRepository", "Error fetching voice_design_audios: ${e.message}")
+        }
+
+        // 3. Fetch from users/{userId}/history if type is Voice Design
+        try {
+            val historySnapshot = db.collection("users").document(userId).collection("history")
+                .get().await()
+            for (doc in historySnapshot.documents) {
+                val type = doc.getString("type") ?: ""
+                if (type.contains("Voice Design", ignoreCase = true) || type.contains("voice_design", ignoreCase = true)) {
+                    val audioUrl = doc.getString("audioUrl") ?: ""
+                    if (audioUrl.isNotEmpty()) {
+                        val voiceName = doc.getString("voiceName") ?: "Custom Voice"
+                        val text = doc.getString("text") ?: ""
+                        val date = doc.getLong("date") ?: System.currentTimeMillis()
+                        list.add(
+                            com.example.ui.screens.VoiceDesignAudioItem(
+                                id = doc.id,
+                                voiceName = voiceName,
+                                referenceText = text,
+                                audioUrl = audioUrl,
+                                date = date
+                            )
+                        )
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
+        // 4. Fetch from root omnivoice_generations if type is Voice Design
+        try {
+            val rootOmniSnapshot = db.collection("omnivoice_generations")
+                .whereEqualTo("userId", userId)
+                .get().await()
+            for (doc in rootOmniSnapshot.documents) {
+                val type = doc.getString("type") ?: ""
+                if (type.contains("Voice Design", ignoreCase = true) || type.contains("voice_design", ignoreCase = true)) {
+                    val audioPath = doc.getString("audioPath") ?: doc.getString("audioUrl") ?: ""
+                    if (audioPath.isNotEmpty()) {
+                        val voiceName = doc.getString("voiceName") ?: "Custom Voice"
+                        val text = doc.getString("text") ?: ""
+                        val date = doc.getLong("createdAt") ?: doc.getLong("date") ?: System.currentTimeMillis()
+                        list.add(
+                            com.example.ui.screens.VoiceDesignAudioItem(
+                                id = doc.id,
+                                voiceName = voiceName,
+                                referenceText = text,
+                                audioUrl = audioPath,
+                                date = date
+                            )
+                        )
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
+        val uniqueMap = LinkedHashMap<String, com.example.ui.screens.VoiceDesignAudioItem>()
+        for (item in list) {
+            val key = if (item.id.isNotEmpty()) item.id else item.audioUrl
+            if (key.isNotEmpty() && !uniqueMap.containsKey(key)) {
+                uniqueMap[key] = item
+            }
+        }
+        return uniqueMap.values.sortedByDescending { it.date }
     }
 }
 

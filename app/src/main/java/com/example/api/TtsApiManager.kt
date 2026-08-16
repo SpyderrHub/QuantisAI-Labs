@@ -100,10 +100,10 @@ object TtsApiManager {
             if (responseJson.has("audio_download_url")) {
                 val audioUrl = responseJson.getString("audio_download_url")
                 
-                // Credit deduction
+                // Credit deduction: deduct sum of text length and instruct (referenceText) length
                 val userId = Firebase.auth.currentUser?.uid
                 if (userId != null) {
-                    val creditsToDeduct = text.length
+                    val creditsToDeduct = text.length + instruct.length
                     com.example.data.FirestoreRepository().addCredits(userId, -creditsToDeduct)
                 }
 

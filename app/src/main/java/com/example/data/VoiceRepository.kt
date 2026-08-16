@@ -21,90 +21,98 @@ class VoiceRepository(context: Context) {
 
     val allVoices: Flow<List<VoiceEntity>> = voiceDao.getAllVoices()
 
-    suspend fun syncVoicesIfNeeded() {
+    suspend fun syncVoicesIfNeeded(userId: String? = null) {
         val lastSync = sharedPrefs.getLong("last_voice_sync", 0L)
         val now = System.currentTimeMillis()
         
         val localCount = withContext(Dispatchers.IO) { voiceDao.getVoicesCount() }
         
-        val needsSync = (now - lastSync) > CACHE_TTL_MS || localCount == 0
+        val needsSync = (now - lastSync) > CACHE_TTL_MS || localCount == 0 || !userId.isNullOrEmpty()
         
-        if (needsSync && isInternetAvailable()) {
+        if (isInternetAvailable()) {
             try {
-                Log.d("VoiceRepository", "Syncing voices from Firestore...")
+                Log.d("VoiceRepository", "Syncing voices from Firestore for user $userId...")
                 val remoteVoices = withContext(Dispatchers.IO) {
-                    firestoreRepository.getVoices()
+                    firestoreRepository.getVoices(userId)
                 }
                 
-                if (remoteVoices.isNotEmpty()) {
-                    withContext(Dispatchers.IO) {
-                        voiceDao.replaceAll(remoteVoices)
-                    }
-                    sharedPrefs.edit().putLong("last_voice_sync", now).apply()
-                    Log.d("VoiceRepository", "Sync complete.")
+                withContext(Dispatchers.IO) {
+                    voiceDao.replaceAll(remoteVoices)
                 }
+                sharedPrefs.edit().putLong("last_voice_sync", now).apply()
+                Log.d("VoiceRepository", "Sync complete.")
             } catch (e: Exception) {
                 Log.e("VoiceRepository", "Failed to sync voices", e)
             }
         }
     }
     
-    suspend fun forceSync() {
+    suspend fun forceSync(userId: String? = null) {
         if (isInternetAvailable()) {
             try {
-                Log.d("VoiceRepository", "Force syncing voices from Firestore...")
+                Log.d("VoiceRepository", "Force syncing voices from Firestore for user $userId...")
                 val remoteVoices = withContext(Dispatchers.IO) {
-                    firestoreRepository.getVoices()
+                    firestoreRepository.getVoices(userId)
                 }
                 
-                if (remoteVoices.isNotEmpty()) {
-                    withContext(Dispatchers.IO) {
-                        voiceDao.replaceAll(remoteVoices)
-                    }
-                    sharedPrefs.edit().putLong("last_voice_sync", System.currentTimeMillis()).apply()
-                    Log.d("VoiceRepository", "Force sync complete.")
+                withContext(Dispatchers.IO) {
+                    voiceDao.replaceAll(remoteVoices)
                 }
+                sharedPrefs.edit().putLong("last_voice_sync", System.currentTimeMillis()).apply()
+                Log.d("VoiceRepository", "Force sync complete.")
             } catch (e: Exception) {
                 Log.e("VoiceRepository", "Failed to force sync voices", e)
             }
         }
     }
 
-    suspend fun saveCustomVoice(voice: VoiceEntity) {
+    suspend fun saveCustomVoice(userId: String? = null, voice: VoiceEntity) {
         withContext(Dispatchers.IO) {
             try {
                 voiceDao.insertVoice(voice)
-                firestoreRepository.saveCustomVoice(voice)
+                firestoreRepository.saveCustomVoice(userId, voice)
             } catch (e: Exception) {
                 Log.e("VoiceRepository", "Error saving custom voice: ${e.message}")
             }
         }
     }
 
-    suspend fun updateCustomVoice(oldName: String, updatedVoice: VoiceEntity) {
+    suspend fun saveCustomVoice(voice: VoiceEntity) {
+        saveCustomVoice(null, voice)
+    }
+
+    suspend fun updateCustomVoice(userId: String? = null, oldName: String, updatedVoice: VoiceEntity) {
         withContext(Dispatchers.IO) {
             try {
                 if (oldName != updatedVoice.voiceName) {
                     voiceDao.deleteVoiceByName(oldName)
-                    firestoreRepository.deleteCustomVoice(oldName)
+                    firestoreRepository.deleteCustomVoice(userId, oldName)
                 }
                 voiceDao.insertVoice(updatedVoice)
-                firestoreRepository.saveCustomVoice(updatedVoice)
+                firestoreRepository.saveCustomVoice(userId, updatedVoice)
             } catch (e: Exception) {
                 Log.e("VoiceRepository", "Error updating custom voice: ${e.message}")
             }
         }
     }
 
-    suspend fun deleteCustomVoice(voiceName: String) {
+    suspend fun updateCustomVoice(oldName: String, updatedVoice: VoiceEntity) {
+        updateCustomVoice(null, oldName, updatedVoice)
+    }
+
+    suspend fun deleteCustomVoice(userId: String? = null, voiceName: String) {
         withContext(Dispatchers.IO) {
             try {
                 voiceDao.deleteVoiceByName(voiceName)
-                firestoreRepository.deleteCustomVoice(voiceName)
+                firestoreRepository.deleteCustomVoice(userId, voiceName)
             } catch (e: Exception) {
                 Log.e("VoiceRepository", "Error deleting custom voice: ${e.message}")
             }
         }
+    }
+
+    suspend fun deleteCustomVoice(voiceName: String) {
+        deleteCustomVoice(null, voiceName)
     }
 
     private fun isInternetAvailable(): Boolean {

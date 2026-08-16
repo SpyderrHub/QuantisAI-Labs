@@ -17,7 +17,6 @@ import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 
-import com.example.api.SttApiManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.net.Uri
@@ -304,12 +303,17 @@ fun MainScreen(authManager: AuthManager, onLogout: () -> Unit, onNavigateToWatch
             ) {
                 when (currentTab) {
                     0 -> HomeScreen(authManager, onNavigateToWatchAd)
-                    1 -> GenerateScreen(authManager, { currentTab = 0 })
+                    1 -> GenerateScreen(
+                        authManager = authManager,
+                        onNavigateToHome = { currentTab = 0 },
+                        onNavigateToAccount = { currentTab = 4 }
+                    )
                     2 -> VoiceDesignScreen(
                         authManager = authManager,
                         onBack = { currentTab = 0 },
                         onNavigateToTts = { currentTab = 1 },
-                        onNavigateToSubscription = { showSubscriptionModal = true }
+                        onNavigateToSubscription = { showSubscriptionModal = true },
+                        onNavigateToAccount = { currentTab = 4 }
                     )
                     3 -> LibraryScreen(authManager)
                     4 -> AccountScreen(authManager, onLogout)
@@ -864,7 +868,7 @@ fun HomeScreen(authManager: AuthManager, onNavigateToWatchAd: () -> Unit) {
                                         .background(Color(0x222E3254)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    if (historyItem.imageUrl.isNotEmpty()) {
+                                    if (historyItem.imageUrl.isNotEmpty() && historyItem.imageUrl.startsWith("http")) {
                                         coil.compose.AsyncImage(
                                             model = historyItem.imageUrl,
                                             contentDescription = null,
@@ -872,11 +876,15 @@ fun HomeScreen(authManager: AuthManager, onNavigateToWatchAd: () -> Unit) {
                                             contentScale = ContentScale.Crop
                                         )
                                     } else {
-                                        Icon(
-                                            imageVector = Icons.Rounded.GraphicEq,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(24.dp)
+                                        val vName = historyItem.voiceName.ifEmpty { "Generated Audio" }
+                                        val initial = vName.trim().firstOrNull { it.isLetterOrDigit() }?.uppercaseChar()?.toString()
+                                            ?: "A"
+                                        Text(
+                                            text = initial,
+                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
                                         )
                                     }
                                 }
@@ -1040,7 +1048,8 @@ fun AudioPlayerCard(
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (!imageUrl.isNullOrEmpty()) {
+        val hasHttpImage = !imageUrl.isNullOrEmpty() && imageUrl.startsWith("http")
+        if (hasHttpImage) {
             coil.compose.AsyncImage(
                 model = imageUrl,
                 contentDescription = null,
@@ -1050,14 +1059,21 @@ fun AudioPlayerCard(
                     .clip(RoundedCornerShape(16.dp))
             )
         } else {
+            val initial = title.trim().firstOrNull { it.isLetterOrDigit() }?.uppercaseChar()?.toString() ?: "V"
             Box(
                 modifier = Modifier
                     .size(80.dp)
                     .clip(RoundedCornerShape(16.dp))
-                    .background(Color.DarkGray),
+                    .background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = Color.White)
+                Text(
+                    text = initial,
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                )
             }
         }
         
@@ -1130,18 +1146,8 @@ data class TtsChatMessageItem(
     val text: String,
     val voiceName: String = "",
     val voiceAvatar: String = "",
+    val userAvatar: String = "",
     val audioUrl: String? = null,
-    val isLoading: Boolean = false,
-    val isLiked: Boolean = false,
-    val timestamp: String = "Just now"
-)
-
-data class SttChatMessageItem(
-    val id: String = java.util.UUID.randomUUID().toString(),
-    val isUser: Boolean,
-    val text: String,
-    val audioUri: Uri? = null,
-    val audioFileName: String? = null,
     val isLoading: Boolean = false,
     val isLiked: Boolean = false,
     val timestamp: String = "Just now"
@@ -1149,8 +1155,11 @@ data class SttChatMessageItem(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GenerateScreen(authManager: AuthManager, onNavigateToHome: () -> Unit) {
-    var isTTS by remember { mutableStateOf(true) }
+fun GenerateScreen(
+    authManager: AuthManager,
+    onNavigateToHome: () -> Unit,
+    onNavigateToAccount: (() -> Unit)? = null
+) {
     var inputText by remember { mutableStateOf("") }
     
     val user = authManager.currentUser.collectAsState(initial = authManager.currentUser.value).value
@@ -1186,42 +1195,16 @@ fun GenerateScreen(authManager: AuthManager, onNavigateToHome: () -> Unit) {
         }
     }
 
-    var sttInputText by remember { mutableStateOf("") }
-    val sttChatMessages = remember {
-        mutableStateListOf<SttChatMessageItem>(
-            SttChatMessageItem(
-                isUser = false,
-                text = "Welcome to Speech-to-Text AI! Attach an audio file (MP3, WAV, M4A) or speak using the microphone, then send to convert audio into text."
-            )
-        )
-    }
-
     val speechToTextLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == android.app.Activity.RESULT_OK) {
             val spokenText = result.data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
             if (!spokenText.isNullOrBlank()) {
-                if (isTTS) {
-                    inputText = if (inputText.isBlank()) spokenText else "$inputText $spokenText"
-                } else {
-                    sttInputText = if (sttInputText.isBlank()) spokenText else "$sttInputText $spokenText"
-                }
+                val newCombined = if (inputText.isBlank()) spokenText else "$inputText $spokenText"
+                inputText = newCombined.take(1500)
             }
         }
-    }
-
-    var selectedAudioUri by remember { mutableStateOf<Uri?>(null) }
-    var isSttGenerating by remember { mutableStateOf(false) }
-    var sttResultText by remember { mutableStateOf<String?>(null) }
-    var sttError by remember { mutableStateOf<String?>(null) }
-    
-    val audioPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        selectedAudioUri = uri
-        sttResultText = null
-        sttError = null
     }
 
     val scope = rememberCoroutineScope()
@@ -1260,67 +1243,26 @@ fun GenerateScreen(authManager: AuthManager, onNavigateToHome: () -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onNavigateToHome) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = "Back",
-                            tint = MaterialTheme.colorScheme.onBackground
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (isTTS) "Text to speech" else "Speech to Text",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
+                IconButton(onClick = onNavigateToHome) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "Back",
+                        tint = MaterialTheme.colorScheme.onBackground
                     )
                 }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Row(
-                        modifier = Modifier
-                            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp))
-                            .padding(4.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (isTTS) MaterialTheme.colorScheme.primary else Color.Transparent)
-                                .clickable { isTTS = true }
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                "TTS",
-                                color = if (isTTS) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (!isTTS) MaterialTheme.colorScheme.primary else Color.Transparent)
-                                .clickable { isTTS = false }
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                "STT",
-                                color = if (!isTTS) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Text to speech",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
             }
 
-            if (isTTS) {
-                // TTS Chat View
-                val listState = rememberLazyListState()
+            // TTS Chat View
+            val listState = rememberLazyListState()
                 LaunchedEffect(chatMessages.size) {
                     if (chatMessages.isNotEmpty()) {
                         listState.animateScrollToItem(chatMessages.size - 1)
@@ -1359,29 +1301,29 @@ fun GenerateScreen(authManager: AuthManager, onNavigateToHome: () -> Unit) {
                                     )
                                 }
                                 Spacer(modifier = Modifier.width(8.dp))
-                                val userAvatar = userProfile?.avatarUrl ?: ""
-                                if (userAvatar.isNotEmpty()) {
-                                    coil.compose.AsyncImage(
-                                        model = userAvatar,
-                                        contentDescription = "User",
-                                        modifier = Modifier
-                                            .size(34.dp)
-                                            .clip(CircleShape),
-                                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                                    )
-                                } else {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(34.dp)
-                                            .clip(CircleShape)
-                                            .background(MaterialTheme.colorScheme.primaryContainer),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = (userProfile?.name?.take(1) ?: "U").uppercase(),
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 14.sp
+                                val userAvatar = msg.userAvatar.ifEmpty { userProfile?.avatarUrl ?: "" }
+                                Box(
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.White),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (userAvatar.isNotEmpty()) {
+                                        coil.compose.AsyncImage(
+                                            model = userAvatar,
+                                            contentDescription = "User Profile Avatar",
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .clip(CircleShape),
+                                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Person,
+                                            contentDescription = "User Profile Avatar",
+                                            tint = Color.Black,
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
                                 }
@@ -1393,16 +1335,44 @@ fun GenerateScreen(authManager: AuthManager, onNavigateToHome: () -> Unit) {
                                 horizontalArrangement = Arrangement.Start,
                                 verticalAlignment = Alignment.Top
                             ) {
-                                val voiceAvatarUrl = msg.voiceAvatar.ifEmpty { "https://i.pravatar.cc/150?u=${msg.voiceName}" }
-                                coil.compose.AsyncImage(
-                                    model = voiceAvatarUrl,
-                                    contentDescription = msg.voiceName,
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .border(1.dp, MaterialTheme.colorScheme.primary, CircleShape),
-                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                                )
+                                val hasHttpAvatar = msg.voiceAvatar.isNotBlank() && msg.voiceAvatar.startsWith("http")
+                                if (hasHttpAvatar) {
+                                    coil.compose.AsyncImage(
+                                        model = msg.voiceAvatar,
+                                        contentDescription = msg.voiceName,
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .border(1.dp, MaterialTheme.colorScheme.primary, CircleShape),
+                                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                    )
+                                } else {
+                                    val initial = msg.voiceName.trim().firstOrNull { it.isLetterOrDigit() }?.uppercaseChar()?.toString()
+                                        ?: "V"
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                brush = androidx.compose.ui.graphics.Brush.radialGradient(
+                                                    colors = listOf(
+                                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+                                                        MaterialTheme.colorScheme.primary
+                                                    )
+                                                )
+                                            )
+                                            .border(1.dp, MaterialTheme.colorScheme.primary, CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = initial,
+                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onPrimary
+                                            )
+                                        )
+                                    }
+                                }
                                 Spacer(modifier = Modifier.width(10.dp))
 
                                 Column(modifier = Modifier.weight(1f, fill = false)) {
@@ -1728,15 +1698,37 @@ fun GenerateScreen(authManager: AuthManager, onNavigateToHome: () -> Unit) {
                                         .padding(horizontal = 10.dp, vertical = 6.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    val imageUrl = voice.avatarUrl.ifEmpty { voice.imageUrl.ifEmpty { "https://i.pravatar.cc/150?u=${voice.voiceName}" } }
-                                    coil.compose.AsyncImage(
-                                        model = imageUrl,
-                                        contentDescription = voice.voiceName,
-                                        modifier = Modifier
-                                            .size(20.dp)
-                                            .clip(CircleShape),
-                                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                                    )
+                                    val rawUrl = voice.avatarUrl.ifEmpty { voice.imageUrl }
+                                    val hasHttpImage = rawUrl.isNotBlank() && rawUrl.startsWith("http") && voice.gender != "Custom"
+                                    if (hasHttpImage) {
+                                        coil.compose.AsyncImage(
+                                            model = rawUrl,
+                                            contentDescription = voice.voiceName,
+                                            modifier = Modifier
+                                                .size(20.dp)
+                                                .clip(CircleShape),
+                                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                        )
+                                    } else {
+                                        val initial = voice.voiceName.trim().firstOrNull { it.isLetterOrDigit() }?.uppercaseChar()?.toString()
+                                            ?: "V"
+                                        Box(
+                                            modifier = Modifier
+                                                .size(20.dp)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.primary),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = initial,
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onPrimary
+                                                )
+                                            )
+                                        }
+                                    }
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = voice.voiceName,
@@ -1784,7 +1776,7 @@ fun GenerateScreen(authManager: AuthManager, onNavigateToHome: () -> Unit) {
 
                         TextField(
                             value = inputText,
-                            onValueChange = { if (it.length <= 2000) inputText = it },
+                            onValueChange = { inputText = it.take(1500) },
                             modifier = Modifier.weight(1f),
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = Color.Transparent,
@@ -1827,7 +1819,8 @@ fun GenerateScreen(authManager: AuthManager, onNavigateToHome: () -> Unit) {
                                     val userMsg = TtsChatMessageItem(
                                         isUser = true,
                                         text = scriptText,
-                                        voiceName = voice.voiceName
+                                        voiceName = voice.voiceName,
+                                        userAvatar = userProfile?.avatarUrl ?: ""
                                     )
                                     chatMessages.add(userMsg)
 
@@ -1910,425 +1903,8 @@ fun GenerateScreen(authManager: AuthManager, onNavigateToHome: () -> Unit) {
                         )
                     }
                 }
-            } else {
-                // Speech to Text View - Chatting Interface
-                val sttListState = rememberLazyListState()
-                LaunchedEffect(sttChatMessages.size) {
-                    if (sttChatMessages.isNotEmpty()) {
-                        sttListState.animateScrollToItem(sttChatMessages.size - 1)
-                    }
-                }
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.background)
-                ) {
-                    // Chat Messages List
-                    LazyColumn(
-                        state = sttListState,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                        contentPadding = PaddingValues(top = 8.dp, bottom = 12.dp)
-                    ) {
-                        items(sttChatMessages, key = { it.id }) { msg ->
-                            if (msg.isUser) {
-                                // User Message Bubble (Right)
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.End,
-                                    verticalAlignment = Alignment.Top
-                                ) {
-                                    Column(
-                                        horizontalAlignment = Alignment.End,
-                                        modifier = Modifier.widthIn(max = 280.dp)
-                                    ) {
-                                        if (!msg.audioFileName.isNullOrBlank()) {
-                                            Row(
-                                                modifier = Modifier
-                                                    .padding(bottom = 6.dp)
-                                                    .clip(RoundedCornerShape(16.dp))
-                                                    .background(MaterialTheme.colorScheme.primaryContainer)
-                                                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Rounded.Mic,
-                                                    contentDescription = "Audio Attachment",
-                                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                    modifier = Modifier.size(16.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Text(
-                                                    text = msg.audioFileName ?: "Audio file",
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                            }
-                                        }
-
-                                        if (msg.text.isNotBlank()) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 4.dp))
-                                                    .background(MaterialTheme.colorScheme.primary)
-                                                    .padding(horizontal = 16.dp, vertical = 12.dp)
-                                            ) {
-                                                Text(
-                                                    text = msg.text,
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    color = MaterialTheme.colorScheme.onPrimary,
-                                                    fontSize = 14.sp
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.width(8.dp))
-
-                                    Box(
-                                        modifier = Modifier
-                                            .size(34.dp)
-                                            .clip(CircleShape)
-                                            .background(MaterialTheme.colorScheme.primaryContainer),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = "U",
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 14.sp
-                                        )
-                                    }
-                                }
-                            } else {
-                                // AI Message Bubble (Left)
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.Start,
-                                    verticalAlignment = Alignment.Top
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(36.dp)
-                                            .clip(CircleShape)
-                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
-                                            .border(1.dp, MaterialTheme.colorScheme.primary, CircleShape),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Mic,
-                                            contentDescription = "STT AI",
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.width(10.dp))
-
-                                    Column(modifier = Modifier.weight(1f, fill = false)) {
-                                        Box(
-                                            modifier = Modifier
-                                                .widthIn(max = 290.dp)
-                                                .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 4.dp, bottomEnd = 20.dp))
-                                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 4.dp, bottomEnd = 20.dp))
-                                                .padding(14.dp)
-                                        ) {
-                                        if (msg.isLoading) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                            ) {
-                                                CircularProgressIndicator(
-                                                    modifier = Modifier.size(18.dp),
-                                                    color = MaterialTheme.colorScheme.primary,
-                                                    strokeWidth = 2.dp
-                                                )
-                                                Text(
-                                                    text = "Transcribing audio to text...",
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    fontSize = 13.sp
-                                                )
-                                            }
-                                        } else {
-                                            Text(
-                                                text = msg.text,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                fontSize = 14.sp,
-                                                lineHeight = 20.sp
-                                            )
-
-                                        }
-
-                                    }
-                                        // Action Icons Row under AI Message (Matches TTS UI)
-                                        if (!msg.isLoading) {
-                                            Row(
-                                                modifier = Modifier.padding(top = 6.dp, start = 4.dp),
-                                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                // Copy Icon
-                                                IconButton(
-                                                    onClick = {
-                                                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                                        val clip = android.content.ClipData.newPlainText("Transcribed Text", msg.text)
-                                                        clipboard.setPrimaryClip(clip)
-                                                        android.widget.Toast.makeText(context, "Copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
-                                                    },
-                                                    modifier = Modifier.size(28.dp)
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Outlined.ContentCopy,
-                                                        contentDescription = "Copy",
-                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
-                                                }
-
-                                                // Like Icon
-                                                IconButton(
-                                                    onClick = {
-                                                        val idx = sttChatMessages.indexOfFirst { it.id == msg.id }
-                                                        if (idx != -1) {
-                                                            sttChatMessages[idx] = sttChatMessages[idx].copy(isLiked = !sttChatMessages[idx].isLiked)
-                                                        }
-                                                    },
-                                                    modifier = Modifier.size(28.dp)
-                                                ) {
-                                                    Icon(
-                                                        imageVector = if (msg.isLiked) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
-                                                        contentDescription = "Like",
-                                                        tint = if (msg.isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
-                                                }
-
-                                                // Re-transcribe / Retry Icon
-                                                IconButton(
-                                                    onClick = {
-                                                        if (msg.audioUri != null) {
-                                                            val idx = sttChatMessages.indexOfFirst { it.id == msg.id }
-                                                            if (idx != -1) {
-                                                                sttChatMessages[idx] = sttChatMessages[idx].copy(isLoading = true, text = "")
-                                                                scope.launch {
-                                                                    val result = SttApiManager.generateText(msg.audioUri.toString())
-                                                                    val updatedIdx = sttChatMessages.indexOfFirst { it.id == msg.id }
-                                                                    if (updatedIdx != -1) {
-                                                                        if (result.isSuccess) {
-                                                                            sttChatMessages[updatedIdx] = sttChatMessages[updatedIdx].copy(
-                                                                                text = result.getOrNull() ?: "No text generated.",
-                                                                                isLoading = false
-                                                                            )
-                                                                        } else {
-                                                                            sttChatMessages[updatedIdx] = sttChatMessages[updatedIdx].copy(
-                                                                                text = "Error: ${result.exceptionOrNull()?.message}",
-                                                                                isLoading = false
-                                                                            )
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
-                                                        } else {
-                                                            android.widget.Toast.makeText(context, "No audio attachment to re-transcribe", android.widget.Toast.LENGTH_SHORT).show()
-                                                        }
-                                                    },
-                                                    modifier = Modifier.size(28.dp)
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Outlined.Refresh,
-                                                        contentDescription = "Re-transcribe",
-                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
-                                                }
-                                            }
-                                        }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Bottom STT Input Area
-                Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.background)
-                            .navigationBarsPadding()
-                            .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp)
-                    ) {
-                        // Input Pill Row (Matches TTS styling exactly)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(28.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(28.dp))
-                                .padding(horizontal = 12.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Audio Picker Button
-                            IconButton(
-                                onClick = {
-                                    audioPickerLauncher.launch("audio/*")
-                                },
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Mic,
-                                    contentDescription = "Select Audio File",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-
-                            // Middle Area: Audio Preview Pill or Placeholder (Matches TTS text area height and padding)
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .heightIn(min = 48.dp)
-                                    .padding(horizontal = 8.dp, vertical = 8.dp),
-                                contentAlignment = Alignment.CenterStart
-                            ) {
-                                if (selectedAudioUri != null) {
-                                    Row(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(16.dp))
-                                            .background(MaterialTheme.colorScheme.primaryContainer)
-                                            .padding(horizontal = 10.dp, vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Mic,
-                                            contentDescription = "Attached Audio",
-                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = selectedAudioUri?.lastPathSegment ?: "Audio file selected",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.weight(1f, fill = false)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Icon(
-                                            imageVector = Icons.Rounded.Close,
-                                            contentDescription = "Remove",
-                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            modifier = Modifier
-                                                .size(16.dp)
-                                                .clickable { selectedAudioUri = null }
-                                        )
-                                    }
-                                } else {
-                                    Text(
-                                        text = "Select an audio file...",
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                        fontSize = 14.sp,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable { audioPickerLauncher.launch("audio/*") }
-                                    )
-                                }
-                            }
-
-                            // Send Button
-                            Box(
-                                modifier = Modifier
-                                    .size(42.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary)
-                                    .clickable {
-                                        val uriToTranscribe = selectedAudioUri
-
-                                        if (uriToTranscribe == null) {
-                                            return@clickable
-                                        }
-
-                                        val fileName = uriToTranscribe.lastPathSegment ?: "Uploaded Audio"
-                                        val userMsg = SttChatMessageItem(
-                                            isUser = true,
-                                            text = "Transcribing $fileName",
-                                            audioUri = uriToTranscribe,
-                                            audioFileName = fileName
-                                        )
-
-                                        val aiMsgId = java.util.UUID.randomUUID().toString()
-                                        val aiMsg = SttChatMessageItem(
-                                            id = aiMsgId,
-                                            isUser = false,
-                                            text = "",
-                                            isLoading = true
-                                        )
-
-                                        sttChatMessages.add(userMsg)
-                                        sttChatMessages.add(aiMsg)
-
-                                        selectedAudioUri = null
-
-                                        scope.launch {
-                                            val result = SttApiManager.generateText(uriToTranscribe.toString())
-
-                                            val idx = sttChatMessages.indexOfFirst { it.id == aiMsgId }
-                                            if (idx != -1) {
-                                                if (result.isSuccess) {
-                                                    val resultText = result.getOrNull() ?: "No transcription text returned."
-                                                    sttChatMessages[idx] = sttChatMessages[idx].copy(
-                                                        text = resultText,
-                                                        isLoading = false
-                                                    )
-                                                    val historyManager = com.example.data.HistoryManager(context)
-                                                    val historyItem = com.example.data.GenerationHistory(
-                                                        id = java.util.UUID.randomUUID().toString(),
-                                                        text = fileName,
-                                                        type = "STT",
-                                                        date = System.currentTimeMillis(),
-                                                        voiceName = "Speech To Text",
-                                                        duration = "",
-                                                        creditsUsed = 0,
-                                                        audioUrl = uriToTranscribe.toString(),
-                                                        imageUrl = ""
-                                                    )
-                                                    historyManager.saveHistoryItem(user?.uid, historyItem)
-                                                } else {
-                                                    val errMsg = result.exceptionOrNull()?.message ?: "Transcription failed"
-                                                    sttChatMessages[idx] = sttChatMessages[idx].copy(
-                                                        text = "Error transcribing audio: $errMsg",
-                                                        isLoading = false
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Rounded.Send,
-                                    contentDescription = "Send",
-                                    tint = MaterialTheme.colorScheme.onPrimary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(12.dp))
-                    }
-                }
             }
         }
-    }
 
     if (showPreviewPlayer && generatedAudioUrl != null) {
         val isFreeUser = (userProfile?.subscriptionPlan?.lowercase(java.util.Locale.getDefault()) ?: "free") == "free"
@@ -2769,15 +2345,30 @@ fun GridVoiceCard(
                     .background(bgColor),
                 contentAlignment = Alignment.Center
             ) {
-                val imageUrl = voice.avatarUrl.ifEmpty { voice.imageUrl.ifEmpty { "https://i.pravatar.cc/150?u=${voice.voiceName}" } }
-                AsyncImage(
-                    model = imageUrl,
-                    contentDescription = voice.voiceName,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(CircleShape),
-                    contentScale = ContentScale.Crop
-                )
+                val rawUrl = voice.avatarUrl.ifEmpty { voice.imageUrl }
+                val hasHttpImage = rawUrl.isNotBlank() && rawUrl.startsWith("http") && voice.gender != "Custom"
+                if (hasHttpImage) {
+                    AsyncImage(
+                        model = rawUrl,
+                        contentDescription = voice.voiceName,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    val initial = voice.voiceName.trim().firstOrNull { it.isLetterOrDigit() }?.uppercaseChar()?.toString()
+                        ?: voice.voiceName.trim().firstOrNull()?.uppercaseChar()?.toString()
+                        ?: "V"
+                    Text(
+                        text = initial,
+                        style = androidx.compose.ui.text.TextStyle(
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = androidx.compose.ui.graphics.Color.White
+                        )
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(10.dp))

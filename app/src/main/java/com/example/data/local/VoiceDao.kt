@@ -33,11 +33,9 @@ interface VoiceDao {
 
     @Transaction
     suspend fun replaceAll(voices: List<VoiceEntity>) {
-        val customVoices = getCustomVoices()
         clearAll()
-        insertVoices(voices)
-        if (customVoices.isNotEmpty()) {
-            insertVoices(customVoices)
+        if (voices.isNotEmpty()) {
+            insertVoices(voices)
         }
     }
 }
